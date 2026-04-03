@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // UI Elements
+    // DOM Elements
     const btnScanTab = document.getElementById('btn-scan'), btnManualTab = document.getElementById('btn-manual');
     const scanView = document.getElementById('scan-view'), manualView = document.getElementById('manual-view');
     const matrixA = document.getElementById('matrix-container'), matrixB = document.getElementById('matrix-container-b');
@@ -10,152 +10,164 @@ document.addEventListener('DOMContentLoaded', () => {
     const video = document.getElementById('camera-feed'), canvas = document.getElementById('capture-canvas');
     const loadingState = document.querySelector('.loading-state'), dataState = document.querySelector('.data-state');
 
-    // Extra Controls
+    // Controls
     const extraControls = document.getElementById('extra-controls'), plusMinusControl = document.getElementById('plus-minus-control'), toggleOpBtn = document.getElementById('toggle-op');
     const powerControl = document.getElementById('power-control'), powerInput = document.getElementById('matrix-pow-val');
 
     let currentMode = 'scan', stream = null, currentPlusMinus = '+';
 
-    // --- MATH UTILS ---
-    function formatFraction(val) { if (Math.abs(val) < 1e-10) return "0"; try { const f = math.fraction(val); return f.d === 1 ? f.s * f.n : `${f.s === -1 ? '-' : ''}${f.n}/${f.d}`; } catch (e) { return val.toFixed(2); } }
-    
-    function isTriangular(A) {
-        let n = A.length; let isUpper = true, isLower = true;
-        for (let i = 0; i < n; i++) {
-            for (let j = 0; j < n; j++) {
-                if (i > j && Math.abs(A[i][j]) > 1e-10) isUpper = false;
-                if (i < j && Math.abs(A[i][j]) > 1e-10) isLower = false;
+    // --- GRID CORE FUNCTIONS ---
+    function createGrid(container, r, c) {
+        if (!container) return;
+        container.innerHTML = '';
+        container.style.display = 'grid';
+        container.style.gridTemplateColumns = `repeat(${c}, 55px)`;
+        container.style.justifyContent = 'center';
+        container.style.gap = '8px';
+        
+        for(let i=0; i < r*c; i++) {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'matrix-cell';
+            input.value = '0';
+            container.appendChild(input);
+        }
+    }
+
+    function getMatrixFromGrid(container, r, c) {
+        const inputs = container.querySelectorAll('input');
+        if (inputs.length === 0) return null;
+        const matrix = [];
+        for(let i=0; i<r; i++) {
+            const row = [];
+            for(let j=0; j<c; j++) {
+                const val = inputs[i*c + j].value;
+                row.push(Number(val) || 0);
             }
+            matrix.push(row);
         }
-        return isUpper || isLower;
+        return matrix;
     }
 
-    function formatMatrixHTML(m, notes = [], augIdx = 0) {
-        let html = `<div style="width:100%; overflow-x:auto; margin:10px 0; padding-bottom:10px;"><div style="display:inline-flex; align-items:center; min-width:100%; justify-content:center; gap:10px; padding:0 20px;">`;
-        html += `<div style="border-left:2px solid #fff; border-right:2px solid #fff; padding:0 8px;">`;
-        m.forEach((row, i) => {
-            html += `<div style="display:flex; gap:12px; height:28px; align-items:center;">`;
-            row.forEach((cell, j) => {
-                if (augIdx > 0 && j === augIdx) html += `<div style="width:1px; height:20px; background:rgba(255,255,255,0.2); margin:0 5px;"></div>`;
-                let color = (i===j) ? "#f1c40f" : "#00d4ff"; // Diagonal Highlight
-                html += `<span style="color:${color}; min-width:42px; text-align:center; font-size:0.75rem;">${formatFraction(cell)}</span>`;
-            });
-            html += `</div>`;
-        });
-        html += `</div><div style="display:flex; flex-direction:column; justify-content:center; padding-left:10px;">`;
-        m.forEach((_, i) => html += `<div style="height:28px; display:flex; align-items:center; color:#ff00c8; font-size:0.7rem; font-weight:700;">${notes[i] || ""}</div>`);
-        return html + `</div></div></div>`;
+    // --- MODE SWITCHING ---
+    function refreshGrids() {
+        const r = parseInt(rowsInput.value), c = parseInt(colsInput.value);
+        createGrid(matrixA, r, c);
+        const op = operationSelect.value;
+        if (['addition', 'multiplication'].includes(op)) {
+            matrixBSection.classList.remove('hidden');
+            createGrid(matrixB, r, c);
+        } else {
+            matrixBSection.classList.add('hidden');
+        }
     }
 
-    // --- SMART DETERMINANT SOLVER ---
-    function solveMatrixSmart(matrixA, matrixB, op) {
-        let A = JSON.parse(JSON.stringify(matrixA));
-        let r = A.length, c = A[0].length;
-        let stepsHTML = `<div style="padding-top:10px; text-align:center;">`;
+    btnScanTab.addEventListener('click', () => {
+        currentMode = 'scan';
+        btnScanTab.classList.add('active');
+        btnManualTab.classList.remove('active');
+        scanView.classList.remove('hidden');
+        manualView.classList.add('hidden');
+    });
 
-        function logStep(msg, m, notes = [], aug = 0) {
-            stepsHTML += `<div style="margin-bottom:20px; padding:10px; border-radius:12px; background:rgba(255,255,255,0.02);">`;
-            stepsHTML += `<p style="font-size:0.6rem; color:var(--secondary); font-weight:800;">[ ${msg} ]</p>`;
-            stepsHTML += formatMatrixHTML(m, notes, aug);
-            stepsHTML += `</div><div style="margin-bottom:10px; opacity:0.3;">↓</div>`;
-        }
+    btnManualTab.addEventListener('click', () => {
+        currentMode = 'manual';
+        btnScanTab.classList.remove('active');
+        btnManualTab.classList.add('active');
+        scanView.classList.add('hidden');
+        manualView.classList.remove('hidden');
+        refreshGrids();
+    });
+
+    updateGridBtn.addEventListener('click', refreshGrids);
+
+    operationSelect.addEventListener('change', () => {
+        const op = operationSelect.value;
+        extraControls.classList.add('hidden'); plusMinusControl.classList.add('hidden'); powerControl.classList.add('hidden');
+        if (op === 'addition') { extraControls.classList.remove('hidden'); plusMinusControl.classList.remove('hidden'); }
+        else if (op === 'power') { extraControls.classList.remove('hidden'); powerControl.classList.remove('hidden'); }
+        if (currentMode === 'manual') refreshGrids();
+    });
+
+    toggleOpBtn.addEventListener('click', () => {
+        currentPlusMinus = (currentPlusMinus === '+') ? '-' : '+';
+        toggleOpBtn.textContent = (currentPlusMinus === '+') ? '+ (Tambah)' : '- (Kurang)';
+    });
+
+    // --- MATH ENGINE ---
+    function formatFraction(val) { if (Math.abs(val) < 1e-10) return "0"; try { const f = math.fraction(val); return f.d === 1 ? f.s * f.n : `${f.s === -1 ? '-' : ''}${f.n}/${f.d}`; } catch (e) { return val.toFixed(2); } }
+    function formatMatrixHTML(m) { const raw = m.toArray ? m.toArray() : m; let h = '<div style="display:inline-block; border-left:2px solid #fff; border-right:2px solid #fff; padding:0 10px;">'; raw.forEach((row, i) => { h += '<div style="display:flex; justify-content:center; gap:12px; height:28px; align-items:center;">'; row.forEach((c, j) => { h += `<span style="color:${i===j?'#f1c40f':'#00d4ff'}; min-width:40px; text-align:center; font-size:0.75rem;">${formatFraction(c)}</span>`; }); h += '</div>'; }); return h + '</div>'; }
+
+    // Smart Determinant Logic (Triangular)
+    function solveMatrixSmart(matA, matB, op) {
+        let A = JSON.parse(JSON.stringify(matA)), r = A.length, c = A[0].length, steps = "";
+        function log(msg, m) { steps += `<div style="margin-bottom:15px; padding:10px; border-radius:10px; background:rgba(255,255,255,0.02);"><p style="font-size:0.6rem; color:var(--secondary); font-weight:800;">[ ${msg} ]</p>${formatMatrixHTML(m)}</div><div style="opacity:0.3; margin-bottom:10px;">↓</div>`; }
 
         if (op === 'determinant') {
-            if (r !== c) throw new Error("Determinant hanya untuk matriks persegi.");
-            let swapCount = 0;
-            
-            if (isTriangular(A)) {
-                logStep("MATRIKS SUDAH SEGITIGA (PINTAS)", A);
-            } else {
-                logStep("MATRIKS AWAL (REDUKSI SEGITIGA ATAS)", A);
-                for (let j = 0; j < c; j++) {
-                    let maxR = j;
-                    for (let i = j + 1; i < r; i++) if (Math.abs(A[i][j]) > Math.abs(A[maxR][j])) maxR = i;
-                    if (Math.abs(A[maxR][j]) < 1e-10) continue;
-                    if (maxR !== j) { [A[j], A[maxR]] = [A[maxR], A[j]]; swapCount++; logStep("TUKAR BARIS", A, {[j]:`R${j+1} ↔ R${maxR+1}`}); }
-                    let notes = [];
-                    for (let i = j + 1; i < r; i++) {
-                        let f = A[i][j] / A[j][j];
-                        if (Math.abs(f) > 1e-10) { A[i] = A[i].map((x,idx) => x - f * A[j][idx]); notes[i] = `R${i+1}-(${formatFraction(f)})R${j+1}`; }
-                    }
-                    if (notes.length > 0) logStep("ELIMINASI BAWAH", A, notes);
-                    if (isTriangular(A)) { logStep("BENTUK SEGITIGA TERBENTUK", A); break; }
+            let swap = 0; log("MATRIKS AWAL", A);
+            function diagCheck(m) { let u=true, l=true; for(let i=0; i<r; i++) for(let j=0; j<r; j++) { if(i>j && Math.abs(m[i][j])>1e-10) u=false; if(i<j && Math.abs(m[i][j])>1e-10) l=false; } return u||l; }
+            if(!diagCheck(A)) {
+                for(let j=0; j<c; j++) {
+                    let mx=j; for(let i=j+1; i<r; i++) if(Math.abs(A[i][j])>Math.abs(A[mx][j])) mx=i;
+                    if(Math.abs(A[mx][j])<1e-10) continue;
+                    if(mx!==j) { [A[j],A[mx]]=[A[mx],A[j]]; swap++; log("TUKAR BARIS", A); }
+                    for(let i=j+1; i<r; i++) { let f=A[i][j]/A[j][j]; A[i]=A[i].map((x,ix)=>x-f*A[j][ix]); }
+                    log("ELIMINASI", A); if(diagCheck(A)) break;
                 }
             }
-
-            let diag = []; let finalDet = Math.pow(-1, swapCount);
-            for(let i=0; i<r; i++) { diag.push(A[i][i]); finalDet *= A[i][i]; }
-            let formulaStr = `(-1)<sup>${swapCount}</sup> × (${diag.map(v=>formatFraction(v)).join(" × ")})`;
-            stepsHTML += `<div style="border-top:2px solid var(--primary); padding-top:20px; background:rgba(0,129,255,0.05); padding:15px; border-radius:15px;">`;
-            stepsHTML += `<h2>Δ = ${formatFraction(finalDet)}</h2>`;
-            stepsHTML += `<p style="font-size:0.75rem; color:var(--text-dim); margin-top:5px;">Δ = ${formulaStr} = ${formatFraction(finalDet)}</p></div>`;
-            return stepsHTML;
-
+            let dArr=[]; let dVal=Math.pow(-1, swap); for(let i=0; i<r; i++) { dArr.push(A[i][i]); dVal*=A[i][i]; }
+            steps += `<div style="border-top:2px solid var(--primary); padding-top:20px;"><h2>Δ = ${formatFraction(dVal)}</h2><p style="font-size:0.7rem;">Formula: (-1)<sup>${swap}</sup> × (${dArr.map(v=>formatFraction(v)).join(" × ")})</p></div>`;
+            return steps;
         } else if (op === 'inverse') {
-            // Augmented logic...
-            for(let i=0; i<r; i++) { for(let j=0; j<r; j++) A[i].push(i===j? 1 : 0); }
-            logStep("AUGMENTED MATRIX [A | I]", A, [], r);
-            let p = 0;
-            for(let j=0; j<r && p<r; j++) {
-                let mx = p;
-                for(let i=p+1; i<r; i++) if(Math.abs(A[i][j])>Math.abs(A[mx][j])) mx=i;
-                if(Math.abs(A[mx][j])<1e-10) continue;
-                if(mx!==p) {[A[p],A[mx]]=[A[mx],A[p]]; logStep("SWAP", A, {[p]:`R${p+1}↔R${mx+1}`}, r);}
-                let dv = A[p][j];
-                if(Math.abs(dv-1)>1e-10) {A[p]=A[p].map(x=>x/dv); logStep("NORMALISASI", A, {[p]:`R${p+1}/(${formatFraction(dv)})`}, r);}
-                for(let i=0; i<r; i++) {
-                    if(i!==p) { let f=A[i][j]; if(Math.abs(f)>1e-10) {A[i]=A[i].map((x,ix)=>x-f*A[p][ix]);} }
-                }
-                logStep("ELIMINASI", A, [], r);
-                p++;
-            }
-            stepsHTML += `<h3>INVERSE RESULT (A⁻¹):</h3>` + formatMatrixHTML(A.map(row=>row.slice(r)));
-            return stepsHTML;
+            return steps + `<h3>RESULT (A⁻¹):</h3>` + formatMatrixHTML(math.inv(matA));
+        } else if (op === 'transpose') {
+            return steps + `<h3>RESULT (Aᵀ):</h3>` + formatMatrixHTML(math.transpose(matA));
         } else if (op === 'addition') {
-            let res = (currentPlusMinus === '+') ? math.add(A, matrixB) : math.subtract(A, matrixB);
-            stepsHTML += `<h3>RESULT (A ${currentPlusMinus} B):</h3>` + formatMatrixHTML(res); return stepsHTML;
+            return steps + `<h3>RESULT (A ${currentPlusMinus} B):</h3>` + formatMatrixHTML((currentPlusMinus==='+')?math.add(matA,matB):math.subtract(matA,matB));
         } else if (op === 'multiplication') {
-            stepsHTML += `<h3>RESULT (A × B):</h3>` + formatMatrixHTML(math.multiply(A, matrixB)); return stepsHTML;
+            return steps + `<h3>RESULT (A × B):</h3>` + formatMatrixHTML(math.multiply(matA,matB));
         } else if (op === 'power') {
-            stepsHTML += `<h3>RESULT (A<sup>${powerInput.value}</sup>):</h3>` + formatMatrixHTML(math.pow(A, Number(powerInput.value))); return stepsHTML;
-        } else {
-            return stepsHTML + `<h3>RESULT (Aᵀ):</h3>` + formatMatrixHTML(math.transpose(A));
+            return steps + `<h3>RESULT (A<sup>${powerInput.value}</sup>):</h3>` + formatMatrixHTML(math.pow(matA, Number(powerInput.value)));
+        } else if (op === 'rank') {
+            return steps + `<h3>MATRIX RANK: ${math.rank(matA)}</h3>`;
         }
+        return steps;
     }
 
-    // --- UI ACTIONS ---
+    // --- CAPTURE / CALCULATE EVENT ---
     captureBtn.addEventListener('click', async () => {
-        resultPanel.classList.remove('hidden'); setTimeout(() => { resultPanel.classList.add('show'); document.querySelector('.panel-content').scrollTop = 0; }, 10);
+        resultPanel.classList.remove('hidden');
+        setTimeout(() => { resultPanel.classList.add('show'); document.querySelector('.panel-content').scrollTop = 0; }, 10);
         loadingState.classList.remove('hidden'); dataState.classList.add('hidden');
+
         try {
             let mA, mB = null;
+            const r = parseInt(rowsInput.value), c = parseInt(colsInput.value);
+
             if (currentMode === 'manual') {
-                mA = getMatrixFromGrid(matrixA, rowsInput.value, colsInput.value);
-                if (['addition', 'multiplication'].includes(operationSelect.value)) mB = getMatrixFromGrid(matrixB, rowsInput.value, colsInput.value);
+                mA = getMatrixFromGrid(matrixA, r, c);
+                if (['addition', 'multiplication'].includes(operationSelect.value)) {
+                    mB = getMatrixFromGrid(matrixB, r, c);
+                }
             } else {
-                const ctx = canvas.getContext('2d'); canvas.width = video.videoWidth; canvas.height = video.videoHeight; ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const eng = await Tesseract.recognize(canvas.toDataURL('image/jpeg'), 'eng'); mA = reconstructMatrix(eng.data.words);
+                const ctx = canvas.getContext('2d'); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const eng = await Tesseract.recognize(canvas.toDataURL('image/jpeg'), 'eng');
+                mA = reconstructMatrix(eng.data.words);
             }
+
+            if (!mA) throw new Error("Angka matriks tidak terbaca atau kosong.");
+            detectedMatrixView.innerHTML = `Matrix A: ${formatMatrixHTML(mA)}`;
             patternReasoning.innerHTML = solveMatrixSmart(mA, mB, operationSelect.value);
             recommendedAnswer.innerHTML = "DONE";
             loadingState.classList.add('hidden'); dataState.classList.remove('hidden');
         } catch (e) { patternReasoning.textContent = e.message; loadingState.classList.add('hidden'); dataState.classList.remove('hidden'); }
     });
 
-    operationSelect.addEventListener('change', () => {
-        const op = operationSelect.value;
-        extraControls.classList.add('hidden'); plusMinusControl.classList.add('hidden'); powerControl.classList.add('hidden'); matrixBSection.classList.add('hidden');
-        if (op === 'addition') { extraControls.classList.remove('hidden'); plusMinusControl.classList.remove('hidden'); matrixBSection.classList.remove('hidden'); if(currentMode==='manual') createGrid(matrixB, rowsInput.value, colsInput.value); }
-        else if (op === 'multiplication') { matrixBSection.classList.remove('hidden'); if(currentMode==='manual') createGrid(matrixB, rowsInput.value, colsInput.value); }
-        else if (op === 'power') { extraControls.classList.remove('hidden'); powerControl.classList.remove('hidden'); }
-    });
-
-    toggleOpBtn.addEventListener('click', () => { currentPlusMinus = (currentPlusMinus === '+') ? '-' : '+'; toggleOpBtn.textContent = (currentPlusMinus === '+') ? '+ (Tambah)' : '- (Kurang)'; });
-    updateGridBtn.addEventListener('click', () => createGrid(matrixA, Number(rowsInput.value), Number(colsInput.value)));
-    function createGrid(c, r, col) { c.innerHTML = ''; c.style.gridTemplateColumns = `repeat(${col}, 50px)`; for(let i=0; i<r*col; i++) { const ins = document.createElement('input'); ins.type = 'number'; ins.className = 'matrix-cell'; ins.value = '0'; c.appendChild(ins); } }
-    function getMatrixFromGrid(c, r, col) { const ins = c.querySelectorAll('input'); const m = []; for(let i=0; i<r; i++) { const row = []; for(let j=0; j<col; j++) row.push(Number(ins[i*col+j].value)); m.push(row); } return m; }
     function reconstructMatrix(words) { const numbers = words.filter(w => /^-?\d+([.,]\d+)?$/.test(w.text)); if (numbers.length === 0) return null; const rows = []; numbers.forEach(num => { let found = false; for (let row of rows) { const avgY = row.reduce((sum, n) => sum + n.bbox.y0, 0) / row.length; if (Math.abs(num.bbox.y0 - avgY) < (num.bbox.y1 - num.bbox.y0) * 0.8) { row.push(num); found = true; break; } } if (!found) rows.push([num]); }); rows.sort((a,b)=>a[0].bbox.y0-b[0].bbox.y0); return rows.map(r => { r.sort((a,b)=>a.bbox.x0 - b.bbox.x0); return r.map(n=>Number(n.text.replace(',','.'))); }); }
-    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(s=>{video.srcObject=s; stream=s;});
+    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(s=>{video.srcObject=s; stream=s;}).catch(e=>console.log("Stream off"));
     closeResult.addEventListener('click', ()=>{resultPanel.classList.remove('show'); setTimeout(()=>resultPanel.classList.add('hidden'), 500);});
+    
+    // Initial State
     createGrid(matrixA, 3, 3);
 });
