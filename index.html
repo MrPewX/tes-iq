@@ -23,16 +23,29 @@
         <section class="category-panel">
             <label class="label">PILIH OPERASI MATRIKS:</label>
             <select id="matrix-operation" class="glass-select">
+                <option value="addition">Matrix Addition/Subtraction</option>
+                <option value="multiplication">Matrix Multiplication</option>
+                <option value="power">Matrix Power</option>
                 <option value="determinant">Determinant</option>
                 <option value="inverse">Inverse Matrix</option>
-                <option value="multiplication">Matrix Multiplication</option>
                 <option value="gauss-jordan">Gauss-Jordan Elimination</option>
                 <option value="cramer">Cramer's Rule</option>
                 <option value="rank">Matrix Rank</option>
                 <option value="transpose">Matrix Transpose</option>
-                <option value="addition">Matrix Addition/Subtraction</option>
             </select>
         </section>
+
+        <!-- Dynamic Operation Controls -->
+        <div id="extra-controls" class="hidden" style="margin-bottom: 20px;">
+            <div id="plus-minus-control" class="hidden" style="display:flex; justify-content:center; gap:10px;">
+                <label style="font-size:0.8rem;">Operasi: </label>
+                <button id="toggle-op" class="small-btn">+ (Tambah)</button>
+            </div>
+            <div id="power-control" class="hidden" style="display:flex; justify-content:center; gap:10px; align-items:center;">
+                <label style="font-size:0.8rem;">Pangkat (n): </label>
+                <input type="number" id="matrix-pow-val" value="2" min="1" max="10" style="width:50px; background:rgba(255,255,255,0.1); border:1px solid #444; color:#fff; text-align:center; border-radius:5px;">
+            </div>
+        </div>
 
         <!-- SCAN TAB -->
         <div id="scan-view">
