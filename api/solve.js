@@ -34,10 +34,7 @@ OUTPUT HARUS DALAM FORMAT JSON BERIKUT:
             }
           }
         ]
-      }],
-      generationConfig: {
-        response_mime_type: "application/json"
-      }
+      }]
     };
 
     const response = await fetch(url, {
@@ -52,7 +49,11 @@ OUTPUT HARUS DALAM FORMAT JSON BERIKUT:
       return res.status(response.status).json({ success: false, message: result.error?.message || 'Gemini API Error' });
     }
 
-    const textResponse = result.candidates[0].content.parts[0].text;
+    let textResponse = result.candidates[0].content.parts[0].text;
+    
+    // Pembersihan jika AI membungkus dengan ```json
+    textResponse = textResponse.replace(/```json|```/g, "").trim();
+    
     const parsed = JSON.parse(textResponse);
 
     res.status(200).json({
