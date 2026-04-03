@@ -101,6 +101,7 @@ body {
     font-size: 2rem;
     background: var(--gradient);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -167,22 +168,25 @@ body {
 .bottom-left { bottom: 0; left: 0; border-right: none; border-top: none; }
 .bottom-right { bottom: 0; right: 0; border-left: none; border-top: none; }
 
-.scanning-line {
+.math-symbols-floating {
     position: absolute;
-    top: 0;
-    left: 0;
     width: 100%;
-    height: 4px;
-    background: linear-gradient(to right, transparent, var(--secondary), transparent);
-    box-shadow: 0 0 15px var(--secondary);
-    animation: scan 3s linear infinite;
+    height: 100%;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    font-size: 2rem;
+    opacity: 0.2;
+    pointer-events: none;
 }
 
-@keyframes scan {
-    0% { top: 0%; opacity: 0; }
-    10% { opacity: 1; }
-    90% { opacity: 1; }
-    100% { top: 100%; opacity: 0; }
+.math-symbols-floating span {
+    animation: float 5s infinite alternate ease-in-out;
+}
+
+@keyframes float {
+    from { transform: translateY(0) rotate(0deg); }
+    to { transform: translateY(-30px) rotate(20deg); }
 }
 
 .controls {

@@ -11,73 +11,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let stream = null;
 
-    // 1. Initialize Camera
+    // 1. Inisialisasi Kamera
     async function initCamera() {
         try {
-            // Prefer back camera for mobile users
             const constraints = {
-                video: {
-                    facingMode: 'environment',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                },
+                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
                 audio: false
             };
-            
             stream = await navigator.mediaDevices.getUserMedia(constraints);
             video.srcObject = stream;
         } catch (err) {
-            console.error('Error accessing camera:', err.name, err.message);
-            // Memberikan pesan spesifik jika HTTPS bermasalah
-            if (location.protocol === 'http:' && location.hostname !== 'localhost') {
-                alert('Browser memblokir kamera di HTTP biasa. Rekomendasi: Gunakan HTTPS (seperti melalui localtunnel). Error: ' + err.message);
-            } else {
-                alert('Gagal mengakses kamera: ' + err.name + ' - ' + err.message);
-            }
+            console.error('Error camera:', err);
+            alert('Gagal kamera. Pastikan menggunakan HTTPS/localhost.');
         }
     }
 
-    // 2. Capture and Solve
+    // 2. Scan & Pecahkan dengan Algoritma Pemrograman
     captureBtn.addEventListener('click', async () => {
         if (!stream) return;
 
-        // Show panel and loader
+        // Show UI Loading
         resultPanel.classList.remove('hidden');
         setTimeout(() => resultPanel.classList.add('show'), 10);
         loadingState.classList.remove('hidden');
         dataState.classList.add('hidden');
+        loadingState.querySelector('p').textContent = "Membaca angka & simbol...";
 
-        // Capture frame
+        // Step A: Capture Gambar ke Canvas
         const context = canvas.getContext('2d');
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+        const imageData = canvas.toDataURL('image/jpeg');
 
         try {
-            // Process with AI (Vercel API)
-            const response = await fetch('/api/solve', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: imageData })
+            // Step B: Gunakan Algoritma OCR (Tesseract) untuk mengekstrak teks
+            // Tanpa AI Generatif/LLM, murni pengenalan pola per karakter
+            const { data: { text } } = await Tesseract.recognize(imageData, 'eng', {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        loadingState.querySelector('p').textContent = `Menganalisis: ${Math.round(m.progress * 100)}%`;
+                    }
+                }
             });
 
-            const result = await response.json();
+            console.log("Teks Terbaca:", text);
+            
+            // Step C: Pembersihan Teks Secara Algoritma (Regex)
+            // Menghapus karakter non-matematika & memperbaiki simbol umum
+            let mathExpression = text
+                .replace(/[^0-9+\-*/().=^xX:]/g, '') // Ambil hanya simbol mtk
+                .replace(/[xX:]/g, match => (match === ':' ? '/' : '*')) // Ubah x -> * dan : -> /
+                .split('=')[0]; // Ambil bagian sebelum tanda '=' jika ada
 
-            if (result.success) {
-                recommendedAnswer.textContent = result.answer;
-                patternReasoning.textContent = result.reasoning;
-                
-                loadingState.classList.add('hidden');
-                dataState.classList.remove('hidden');
-            } else {
-                throw new Error(result.message || 'Gagal menganalisis soal.');
+            if (!mathExpression.trim()) {
+                throw new Error("Tidak menemukan angka atau rumus matematika yang jelas.");
             }
 
+            // Step D: Gunakan Mesin Algoritma Matematika (Math.js) untuk menghitung
+            loadingState.querySelector('p').textContent = "Menghitung hasil...";
+            const resultValue = math.evaluate(mathExpression);
+
+            // Step E: Tampilkan Hasil
+            recommendedAnswer.textContent = resultValue;
+            patternReasoning.innerHTML = `
+                <b>Input Terdeteksi:</b> <code style="color: #00d4ff;">${mathExpression}</code><br><br>
+                <b>Metode:</b> Pemecahan Algoritma Murni (Math Engine).<br>
+                <b>Status:</b> Selesai tanpa bantuan AI.
+            `;
+            
+            loadingState.classList.add('hidden');
+            dataState.classList.remove('hidden');
+
         } catch (err) {
-            recommendedAnswer.textContent = 'ERROR';
-            patternReasoning.textContent = err.message || 'Terjadi kesalahan sistem. Coba lagi.';
+            console.error(err);
+            recommendedAnswer.textContent = 'Gagal';
+            patternReasoning.textContent = "Kesalahan Algoritma: " + err.message + ". Pastikan tulisan soal terlihat jelas dan kontras.";
             loadingState.classList.add('hidden');
             dataState.classList.remove('hidden');
         }
