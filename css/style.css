@@ -291,21 +291,38 @@ body {
     font-size: 1.2rem;
 }
 
-/* Result Panel */
 .result-panel {
     position: fixed;
     bottom: 20px;
     left: 20px;
     right: 20px;
+    max-height: 85vh; /* Batasi tinggi kotak hasil */
     background: var(--panel-bg);
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(25px);
     border: 1px solid var(--glass-border);
     border-radius: 24px;
     padding: 20px;
-    z-index: 100;
+    z-index: 1000;
     transform: translateY(120%);
-    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-    box-shadow: 0 -20px 40px rgba(0,0,0,0.5);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 -20px 60px rgba(0,0,0,0.7);
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-content {
+    overflow-y: auto; /* Aktifkan scroll di dalam isi hasil */
+    flex: 1;
+    padding-bottom: 30px;
+}
+
+/* Custom Scrollbar for Results */
+.panel-content::-webkit-scrollbar {
+    width: 4px;
+}
+.panel-content::-webkit-scrollbar-thumb {
+    background: var(--secondary);
+    border-radius: 10px;
 }
 
 .result-panel.show {
