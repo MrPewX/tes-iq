@@ -44,7 +44,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return isUpper || isLower;
     }
 
-    // Format Augmented [A | B]
     function formatMatrixHTML(matrix, notes = [], augmented = false) {
         let rows = matrix.length;
         let cols = matrix[0].length;
@@ -54,14 +53,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Matrix Part
         html += `<div style="border-left:2px solid #fff; border-right:2px solid #fff; padding:0 5px; position:relative;">`;
         matrix.forEach((row, i) => {
-            html += `<div style="display:flex; gap:10px; height:30px; align-items:center;">`;
+            html += `<div style="display:flex; gap:12px; height:30px; align-items:center;">`;
             row.forEach((cell, j) => {
-                // Tambahkan Garis Vertikal (Augmented) sebelum kolom terakhir
                 if (augmented && j === cols - 1) {
                     html += `<div style="width:1px; height:20px; background:rgba(255,255,255,0.4); margin:0 5px;"></div>`;
                 }
                 let color = (i === j) ? "#f1c40f" : "#00d4ff"; 
-                html += `<span style="color:${color}; min-width:40px; text-align:center; font-size:0.75rem;">${formatFraction(cell)}</span>`;
+                html += `<span style="color:${color}; min-width:42px; text-align:center; font-size:0.75rem;">${formatFraction(cell)}</span>`;
             });
             html += `</div>`;
         });
@@ -76,19 +74,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return html;
     }
 
-    // --- ADVANCED SOLVER ENGINE ---
+    // --- SOLVER ENGINE ---
     function solveMatrixComplex(originalMatrix, op) {
         let A = JSON.parse(JSON.stringify(originalMatrix));
         let r = A.length, c = A[0].length;
         let stepsHTML = `<div style="padding-top:10px; text-align:center;">`;
         let swapCount = 0;
-        let detFactors = [];
-        let isAugmented = (op === 'gauss-jordan');
+        let isGaussJordan = (op === 'gauss-jordan');
 
         function logStep(msg, matrix, notes) {
             stepsHTML += `<div style="margin-bottom:20px; padding:10px 0; background:rgba(255,255,255,0.02); border-radius:12px;">`;
             stepsHTML += `<p style="font-size:0.6rem; color:var(--secondary); font-weight:800; text-transform:uppercase;">[ ${msg} ]</p>`;
-            stepsHTML += formatMatrixHTML(matrix, notes, isAugmented);
+            stepsHTML += formatMatrixHTML(matrix, notes, isGaussJordan);
             stepsHTML += `</div>`;
             stepsHTML += `<div style="color:var(--text-dim); margin-bottom:10px;">↓</div>`;
         }
@@ -96,10 +93,8 @@ document.addEventListener('DOMContentLoaded', () => {
         logStep("MATRIKS AWAL", A, []);
 
         if (op === 'determinant') {
-            // Logika Segitiga Atas seperti sebelumnya...
-            if (isTriangular(A)) {
-                logStep("MATRIKS SUDAH SEGITIGA", A, []);
-            } else {
+            if (r !== c) throw new Error("Matrix harus persegi.");
+            if (!isTriangular(A)) {
                 for (let j = 0; j < c; j++) {
                     let maxR = j;
                     for(let i=j+1; i<r; i++) if(Math.abs(A[i][j]) > Math.abs(A[maxR][j])) maxR = i;
@@ -112,52 +107,55 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     if(notes.length > 0) logStep("ELIMINASI BAWAH", A, notes);
                 }
-            }
-            let diag = []; let det = Math.pow(-1, swapCount);
-            for(let i=0; i<r; i++) { diag.push(A[i][i]); det *= A[i][i]; }
-            stepsHTML += `<div style="border-top:2px solid var(--primary); padding-top:20px;"><h2>Δ = ${formatFraction(det)}</h2></div>`;
-        } else if (op === 'gauss-jordan') {
-            // Logika Gauss-Jordan Lengkap + Augmented
+            } else { logStep("SDH BENTUK SEGITIGA", A, []); }
+
+            let diag = []; let termDet = Math.pow(-1, swapCount);
+            for(let i=0; i<r; i++) diag.push(A[i][i]);
+            let totalDet = termDet * diag.reduce((p,v)=>p*v, 1);
+            
+            let formulaStr = `(${termDet}) × ${diag.map(v => `(${formatFraction(v)})`).join(" × ")}`;
+
+            stepsHTML += `<div style="border-top:2px solid var(--primary); padding-top:20px; background:rgba(0,129,255,0.05); border-radius:15px; padding:15px;">`;
+            stepsHTML += `<h2 style="color:#fff; font-weight:800; margin-bottom:10px;">Δ = ${formatFraction(totalDet)}</h2>`;
+            stepsHTML += `<p style="font-size:0.75rem; color:var(--text-dim);">Rumus: Δ = (-1)<sup>${swapCount}</sup> × Produk Diagonal</p>`;
+            stepsHTML += `<p style="font-size:0.8rem; color:var(--secondary); font-weight:600; margin-top:5px;">Δ = ${formulaStr} = ${formatFraction(totalDet)}</p>`;
+            stepsHTML += `</div>`;
+
+        } else if (isGaussJordan) {
             let pivot = 0;
             for(let j=0; j < c-1 && pivot < r; j++) {
                 let maxR = pivot;
                 for(let i=pivot+1; i<r; i++) if(Math.abs(A[i][j]) > Math.abs(A[maxR][j])) maxR = i;
                 if(Math.abs(A[maxR][j]) < 1e-10) continue;
                 if(maxR !== pivot) { [A[pivot], A[maxR]] = [A[maxR], A[pivot]]; logStep("SWAP", A, {[pivot]:`R${pivot+1} ↔ R${maxR+1}`}); }
-                
                 let div = A[pivot][j];
                 if(Math.abs(div-1) > 1e-10) { A[pivot] = A[pivot].map(x => x/div); logStep("NORMALISASI", A, {[pivot]:`R${pivot+1} / ${formatFraction(div)}`}); }
-                
-                let notes = [];
+                let ns = [];
                 for(let i=0; i<r; i++) {
                     if(i !== pivot) {
                         let f = A[i][j];
-                        if(Math.abs(f) > 1e-10) { A[i] = A[i].map((x,idx) => x - f * A[pivot][idx]); notes[i] = `R${i+1}-(${formatFraction(f)})R${pivot+1}`; }
+                        if(Math.abs(f) > 1e-10) { A[i] = A[i].map((x,idx) => x - f * A[pivot][idx]); ns[i] = `R${i+1}-(${formatFraction(f)})R${pivot+1}`; }
                     }
                 }
-                if(notes.length > 0) logStep("ELIMINASI", A, notes);
+                if(ns.length > 0) logStep("ELIMINASI", A, ns);
                 pivot++;
             }
-            stepsHTML += `<div style="border-top:2px solid var(--primary); padding-top:20px;"><h3>SELESAI (BENTUK ESELON)</h3></div>`;
+            stepsHTML += `<div style="border-top:2px solid var(--primary); padding-top:20px;"><h3>GAUSS-JORDAN DONE</h3></div>`;
         }
 
         return stepsHTML + `</div>`;
     }
 
-    // --- UI ACTIONS (TABS, GRID, CAPTURE) ---
+    // --- UI & GRID LOGIC ---
     function createGrid(container, r, c) {
-        container.innerHTML = '';
-        container.style.gridTemplateColumns = `repeat(${c}, 50px)`;
+        container.innerHTML = ''; container.style.gridTemplateColumns = `repeat(${c}, 50px)`;
         for(let i=0; i < r*c; i++) {
             const input = document.createElement('input'); 
             input.type = 'number'; input.className = 'matrix-cell'; input.value = '0';
             container.appendChild(input);
         }
     }
-
-    updateGridBtn.addEventListener('click', () => {
-        createGrid(matrixA, Number(rowsInput.value), Number(colsInput.value));
-    });
+    updateGridBtn.addEventListener('click', () => createGrid(matrixA, Number(rowsInput.value), Number(colsInput.value)));
 
     captureBtn.addEventListener('click', async () => {
         resultPanel.classList.remove('hidden');
@@ -169,23 +167,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ctx = canvas.getContext('2d'); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const engine = await Tesseract.recognize(canvas.toDataURL('image/jpeg'), 'eng');
-                const rawM = reconstructMatrix(engine.data.words);
-                m = rawM;
+                m = reconstructMatrix(engine.data.words);
             } else {
                 const ins = matrixA.querySelectorAll('input'); 
                 const r = Number(rowsInput.value), col = Number(colsInput.value);
                 m = []; for(let i=0; i<r; i++) {
-                    const row = []; for(let j=0; j<col; j++) row.push(Number(ins[i*col + j].value));
-                    m.push(row);
+                    let row = []; for(let j=0; j<col; j++) row.push(Number(ins[i*col + j].value)); m.push(row);
                 }
             }
             patternReasoning.innerHTML = solveMatrixComplex(m, operationSelect.value);
-            recommendedAnswer.innerHTML = "DONE";
+            recommendedAnswer.innerHTML = "SELESAI";
             loadingState.classList.add('hidden'); dataState.classList.remove('hidden');
-        } catch (e) {
-            patternReasoning.textContent = e.message;
-            loadingState.classList.add('hidden'); dataState.classList.remove('hidden');
-        }
+        } catch (e) { patternReasoning.textContent = e.message; loadingState.classList.add('hidden'); dataState.classList.remove('hidden'); }
     });
 
     function reconstructMatrix(words) {
