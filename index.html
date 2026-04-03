@@ -17,35 +17,58 @@
     </div>
 
     <main class="app-container">
-        <header class="app-header">
-            <div class="logo">
-                <i class="fas fa-square-root-variable"></i>
-                <h1>MATH<span>AI</span> PRO</h1>
-            </div>
-            <p>Arahkan kamera ke soal Matematika Anda.</p>
-        </header>
+        <section class="category-section">
+            <select id="matrix-operation" class="glass-select">
+                <option value="addition">Matrix Addition/Subtraction</option>
+                <option value="multiplication">Matrix Multiplication</option>
+                <option value="determinant">Determinant</option>
+                <option value="inverse">Inverse Matrix</option>
+                <option value="gauss-jordan">Gauss-Jordan Elimination</option>
+                <option value="cramer">Cramer's Rule</option>
+                <option value="rank">Matrix Rank</option>
+                <option value="power">Matrix Power</option>
+                <option value="transpose">Matrix Transpose</option>
+                <option value="inverse-method">Inverse Matrix Method</option>
+            </select>
+        </section>
 
-        <section class="camera-section">
-            <div class="video-wrapper">
-                <video id="camera-feed" autoplay playsinline webkit-playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+        <section class="matrix-input-area">
+            <div class="matrix-grid-controls">
+                <label>Ukuran: </label>
+                <input type="number" id="rows" value="3" min="1" max="5"> x 
+                <input type="number" id="cols" value="3" min="1" max="5">
+                <button id="update-grid" class="small-btn">Update Grid</button>
+            </div>
+            
+            <div id="matrix-container" class="matrix-container">
+                <!-- Matrix A -->
+            </div>
+
+            <div id="matrix-b-section" class="hidden" style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 15px;">
+                <p style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 10px;">Matriks B (Untuk Kali/Tambah/Kurang):</p>
+                <div id="matrix-container-b" class="matrix-container"></div>
+            </div>
+        </section>
+
+        <section class="camera-section" style="margin-top: 20px;">
+            <div class="video-wrapper" style="aspect-ratio: 16/9; height: 150px;">
+                <video id="camera-feed" autoplay playsinline webkit-playsinline muted></video>
                 <div class="scan-overlay">
                     <div class="corner top-left"></div>
                     <div class="corner top-right"></div>
                     <div class="corner bottom-left"></div>
                     <div class="corner bottom-right"></div>
-                    <div class="math-symbols-floating">
-                        <span>∫</span><span>Σ</span><span>π</span><span>√</span>
-                    </div>
                 </div>
             </div>
-            
-            <div class="controls">
-                <button id="capture-btn" class="main-btn" title="Solve Math Problem">
-                    <span class="btn-icon"><i class="fas fa-calculator"></i></span>
-                    <span class="btn-text">SOLVE MATH</span>
-                </button>
-            </div>
+            <p style="font-size: 0.7rem; color: var(--text-dim); text-align: center; margin-top: 5px;">Gunakan kamera hanya untuk melihat soal asli di kertas.</p>
         </section>
+
+        <div class="controls" style="margin-top: 20px;">
+            <button id="capture-btn" class="main-btn" title="Solve Matrix">
+                <span class="btn-icon"><i class="fas fa-microchip"></i></span>
+                <span class="btn-text">SOLVE WITH ALGORITHM</span>
+            </button>
+        </div>
 
         <section id="result-panel" class="result-panel hidden">
             <div class="panel-header">

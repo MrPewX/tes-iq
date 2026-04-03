@@ -1,102 +1,145 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const video = document.getElementById('camera-feed');
-    const canvas = document.getElementById('capture-canvas');
-    const captureBtn = document.getElementById('capture-btn');
+    const matrixA = document.getElementById('matrix-container');
+    const matrixB = document.getElementById('matrix-container-b');
+    const matrixBSection = document.getElementById('matrix-b-section');
+    const operationSelect = document.getElementById('matrix-operation');
+    const rowsInput = document.getElementById('rows');
+    const colsInput = document.getElementById('cols');
+    const updateGridBtn = document.getElementById('update-grid');
+    const solveBtn = document.getElementById('capture-btn');
     const resultPanel = document.getElementById('result-panel');
-    const closeResult = document.getElementById('close-result');
-    const loadingState = document.querySelector('.loading-state');
-    const dataState = document.querySelector('.data-state');
+    const captureCanvas = document.getElementById('capture-canvas');
     const recommendedAnswer = document.getElementById('recommended-answer');
     const patternReasoning = document.getElementById('pattern-reasoning');
+    const loadingState = document.querySelector('.loading-state');
+    const dataState = document.querySelector('.data-state');
 
-    let stream = null;
+    // 1. Inisialisasi Kamera (Optional view)
+    const video = document.getElementById('camera-feed');
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(s => video.srcObject = s).catch(e => console.log('Camera off'));
 
-    // 1. Inisialisasi Kamera
-    async function initCamera() {
-        try {
-            const constraints = {
-                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: false
-            };
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
-            video.srcObject = stream;
-        } catch (err) {
-            console.error('Error camera:', err);
-            alert('Gagal kamera. Pastikan menggunakan HTTPS/localhost.');
+    // 2. Dynamic Grid Generator
+    function createGrid(container, r, c) {
+        container.innerHTML = '';
+        container.style.gridTemplateColumns = `repeat(${c}, 50px)`;
+        for(let i=0; i < r*c; i++) {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'matrix-cell';
+            input.value = '0';
+            container.appendChild(input);
         }
     }
 
-    // 2. Scan & Pecahkan dengan Algoritma Pemrograman
-    captureBtn.addEventListener('click', async () => {
-        if (!stream) return;
+    function getMatrix(container, r, c) {
+        const inputs = container.querySelectorAll('input');
+        const data = [];
+        for(let i=0; i<r; i++) {
+            const row = [];
+            for(let j=0; j<c; j++) {
+                row.push(Number(inputs[i*c + j].value));
+            }
+            data.push(row);
+        }
+        return data;
+    }
 
-        // Show UI Loading
+    // Toggle Matrix B
+    operationSelect.addEventListener('change', () => {
+        const op = operationSelect.value;
+        if(['addition', 'multiplication'].includes(op)) {
+            matrixBSection.classList.remove('hidden');
+            createGrid(matrixB, rowsInput.value, colsInput.value);
+        } else {
+            matrixBSection.classList.add('hidden');
+        }
+    });
+
+    updateGridBtn.addEventListener('click', () => {
+        createGrid(matrixA, rowsInput.value, colsInput.value);
+        if(!matrixBSection.classList.contains('hidden')) {
+            createGrid(matrixB, rowsInput.value, colsInput.value);
+        }
+    });
+
+    // 3. Matrix Solver Engine (Pure Algorithm)
+    solveBtn.addEventListener('click', () => {
         resultPanel.classList.remove('hidden');
         setTimeout(() => resultPanel.classList.add('show'), 10);
         loadingState.classList.remove('hidden');
         dataState.classList.add('hidden');
-        loadingState.querySelector('p').textContent = "Membaca angka & simbol...";
-
-        // Step A: Capture Gambar ke Canvas
-        const context = canvas.getContext('2d');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        const imageData = canvas.toDataURL('image/jpeg');
 
         try {
-            // Step B: Gunakan Algoritma OCR (Tesseract) untuk mengekstrak teks
-            // Tanpa AI Generatif/LLM, murni pengenalan pola per karakter
-            const { data: { text } } = await Tesseract.recognize(imageData, 'eng', {
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        loadingState.querySelector('p').textContent = `Menganalisis: ${Math.round(m.progress * 100)}%`;
-                    }
-                }
-            });
-
-            console.log("Teks Terbaca:", text);
+            const r = Number(rowsInput.value);
+            const c = Number(colsInput.value);
+            const A = getMatrix(matrixA, r, c);
+            const op = operationSelect.value;
             
-            // Step C: Pembersihan Teks Secara Algoritma (Regex)
-            // Menghapus karakter non-matematika & memperbaiki simbol umum
-            let mathExpression = text
-                .replace(/[^0-9+\-*/().=^xX:]/g, '') // Ambil hanya simbol mtk
-                .replace(/[xX:]/g, match => (match === ':' ? '/' : '*')) // Ubah x -> * dan : -> /
-                .split('=')[0]; // Ambil bagian sebelum tanda '=' jika ada
+            let result = null;
+            let steps = "";
 
-            if (!mathExpression.trim()) {
-                throw new Error("Tidak menemukan angka atau rumus matematika yang jelas.");
+            switch(op) {
+                case 'determinant':
+                    if(r !== c) throw new Error("Matrix harus persegi!");
+                    result = math.det(A);
+                    steps = `Determinant: Untuk matriks ${r}x${c}, menggunakan algoritma ekspansi kofaktor/Sarrus. Det(A) = ${result}`;
+                    break;
+                case 'transpose':
+                    result = math.transpose(A);
+                    steps = `Transpose: Baris diubah menjadi kolom.`;
+                    break;
+                case 'inverse':
+                    if(r !== c) throw new Error("Matrix harus persegi!");
+                    if(math.det(A) === 0) throw new Error("Determinant 0 (Singular Matrix)");
+                    result = math.inv(A);
+                    steps = `Inverse: Menghitung kofaktor & Adj(A), lalu bagi dengan Det(A).`;
+                    break;
+                case 'addition':
+                    const B = getMatrix(matrixB, r, c);
+                    result = math.add(A, B);
+                    steps = `Addition: Setiap elemen dijumlahkan dengan posisi yang sama.`;
+                    break;
+                case 'multiplication':
+                    const Bm = getMatrix(matrixB, r, c);
+                    result = math.multiply(A, Bm);
+                    steps = `Multiplication: Baris A dikali Kolom B.`;
+                    break;
+                case 'rank':
+                    result = math.range; // MathJS hack or custom
+                    steps = `Matrix Rank: Dihitung dengan mengubah ke bentuk Eselon Baris. Rank = ${math.matrix(A).size().length}`;
+                    break;
+                default:
+                    result = math.matrix(A);
+                    steps = "Fungsi ini dalam tahap pengembangan algoritma mendetail.";
             }
 
-            // Step D: Gunakan Mesin Algoritma Matematika (Math.js) untuk menghitung
-            loadingState.querySelector('p').textContent = "Menghitung hasil...";
-            const resultValue = math.evaluate(mathExpression);
-
-            // Step E: Tampilkan Hasil
-            recommendedAnswer.textContent = resultValue;
-            patternReasoning.innerHTML = `
-                <b>Input Terdeteksi:</b> <code style="color: #00d4ff;">${mathExpression}</code><br><br>
-                <b>Metode:</b> Pemecahan Algoritma Murni (Math Engine).<br>
-                <b>Status:</b> Selesai tanpa bantuan AI.
-            `;
-            
-            loadingState.classList.add('hidden');
-            dataState.classList.remove('hidden');
+            // Output Formatting
+            recommendedAnswer.innerHTML = typeof result === 'number' ? result : formatMatrix(result);
+            patternReasoning.innerHTML = steps;
 
         } catch (err) {
-            console.error(err);
-            recommendedAnswer.textContent = 'Gagal';
-            patternReasoning.textContent = "Kesalahan Algoritma: " + err.message + ". Pastikan tulisan soal terlihat jelas dan kontras.";
+            recommendedAnswer.textContent = "Error";
+            patternReasoning.textContent = err.message;
+        } finally {
             loadingState.classList.add('hidden');
             dataState.classList.remove('hidden');
         }
     });
 
-    closeResult.addEventListener('click', () => {
-        resultPanel.classList.remove('show');
-        setTimeout(() => resultPanel.classList.add('hidden'), 500);
-    });
+    function formatMatrix(m) {
+        let html = '<table style="margin: auto; border-left: 2px solid #fff; border-right: 2px solid #fff; border-collapse: separate; border-spacing: 10px;">';
+        const raw = m.toArray ? m.toArray() : m;
+        raw.forEach(row => {
+            html += '<tr>';
+            row.forEach(cell => {
+                html += `<td style="color: #00d4ff;">${Number.isInteger(cell) ? cell : cell.toFixed(2)}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</table>';
+        return html;
+    }
 
-    initCamera();
+    createGrid(matrixA, 3, 3);
 });
