@@ -1,0 +1,9 @@
+{
+  "name": "iq-solver-ai",
+  "version": "1.0.0",
+  "description": "Premium AI IQ Test Solver with Vercel API",
+  "main": "index.html",
+  "dependencies": {
+    "node-fetch": "2.6.7"
+  }
+}
