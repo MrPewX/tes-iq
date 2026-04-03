@@ -4,7 +4,7 @@ export default async function handler(req, res) {
   }
 
   const { image } = req.body;
-  const API_KEY = "AIzaSyDg3Q71z_k1fTqytFIqFnkfRRZUTUam2Gc"; 
+  const API_KEY = "AIzaSyATHLsll-CA7QDAAJSrWrBY1Wbz4uY_C0Y"; 
 
   if (!image) {
     return res.status(400).json({ success: false, message: 'No image data provided.' });
