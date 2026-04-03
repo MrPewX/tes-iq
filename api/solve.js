@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
   try {
     const base64Data = image.split(';base64,').pop();
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
 
     const prompt = `Tolong perhatikan gambar ini baik-baik. Ini adalah soal tes IQ (Bisa berupa matrix reasoning 3x3, urutan angka, atau pola spasial). 
 Analisis pola logika yang digunakan (misal: operasi antar baris/kolom, rotasi, penambahan elemen, atau urutan aritmatika). 
