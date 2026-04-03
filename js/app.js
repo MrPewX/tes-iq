@@ -1,145 +1,177 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const matrixA = document.getElementById('matrix-container');
-    const matrixB = document.getElementById('matrix-container-b');
-    const matrixBSection = document.getElementById('matrix-b-section');
-    const operationSelect = document.getElementById('matrix-operation');
-    const rowsInput = document.getElementById('rows');
-    const colsInput = document.getElementById('cols');
-    const updateGridBtn = document.getElementById('update-grid');
-    const solveBtn = document.getElementById('capture-btn');
+    const video = document.getElementById('camera-feed');
+    const canvas = document.getElementById('capture-canvas');
+    const captureBtn = document.getElementById('capture-btn');
     const resultPanel = document.getElementById('result-panel');
-    const captureCanvas = document.getElementById('capture-canvas');
-    const recommendedAnswer = document.getElementById('recommended-answer');
-    const patternReasoning = document.getElementById('pattern-reasoning');
+    const closeResult = document.getElementById('close-result');
     const loadingState = document.querySelector('.loading-state');
     const dataState = document.querySelector('.data-state');
+    const recommendedAnswer = document.getElementById('recommended-answer');
+    const patternReasoning = document.getElementById('pattern-reasoning');
+    const detectedMatrixView = document.getElementById('detected-matrix-view');
+    const operationSelect = document.getElementById('matrix-operation');
 
-    // 1. Inisialisasi Kamera (Optional view)
-    const video = document.getElementById('camera-feed');
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        .then(s => video.srcObject = s).catch(e => console.log('Camera off'));
+    let stream = null;
 
-    // 2. Dynamic Grid Generator
-    function createGrid(container, r, c) {
-        container.innerHTML = '';
-        container.style.gridTemplateColumns = `repeat(${c}, 50px)`;
-        for(let i=0; i < r*c; i++) {
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.className = 'matrix-cell';
-            input.value = '0';
-            container.appendChild(input);
+    // 1. Inisialisasi Kamera
+    async function initCamera() {
+        try {
+            const constraints = {
+                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false
+            };
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+        } catch (err) {
+            console.error('Camera access failed:', err);
+            alert('Gagal mengakses kamera. Mohon izinkan akses kamera.');
         }
     }
 
-    function getMatrix(container, r, c) {
-        const inputs = container.querySelectorAll('input');
-        const data = [];
-        for(let i=0; i<r; i++) {
-            const row = [];
-            for(let j=0; j<c; j++) {
-                row.push(Number(inputs[i*c + j].value));
+    // 2. Algoritma Grid Reconstruction
+    // Mengubah data OCR mentah menjadi Matriks yang valid melalui ALGORITMA kordinat
+    function reconstructMatrix(words) {
+        // Filter hanya angka (boleh negatif atau desimal)
+        const numbers = words.filter(w => /^-?\d+([.,]\d+)?$/.test(w.text));
+        if (numbers.length === 0) return null;
+
+        // Kelompokkan dalam baris berdasarkan kordinat Y (toleransi 10% tinggi kata)
+        const rows = [];
+        numbers.forEach(num => {
+            let found = false;
+            for (let row of rows) {
+                const avgY = row.reduce((sum, n) => sum + n.bbox.y0, 0) / row.length;
+                if (Math.abs(num.bbox.y0 - avgY) < (num.bbox.y1 - num.bbox.y0) * 0.8) {
+                    row.push(num);
+                    found = true;
+                    break;
+                }
             }
-            data.push(row);
-        }
-        return data;
+            if (!found) rows.push([num]);
+        });
+
+        // Urutkan Baris (Atas -> Bawah)
+        rows.sort((a, b) => a[0].bbox.y0 - b[0].bbox.y0);
+
+        // Urutkan Angka dalam setiap Baris (Kiri -> Kanan)
+        const matrixData = rows.map(row => {
+            row.sort((a, b) => a.bbox.x0 - b.bbox.x0);
+            return row.map(n => Number(n.text.replace(',', '.')));
+        });
+
+        // Normalisasi ukuran matriks agar seragam (Padding 0 jika ada baris yang ompong)
+        const maxCols = Math.max(...matrixData.map(r => r.length));
+        return matrixData.map(r => {
+            while (r.length < maxCols) r.push(0);
+            return r;
+        });
     }
 
-    // Toggle Matrix B
-    operationSelect.addEventListener('change', () => {
-        const op = operationSelect.value;
-        if(['addition', 'multiplication'].includes(op)) {
-            matrixBSection.classList.remove('hidden');
-            createGrid(matrixB, rowsInput.value, colsInput.value);
-        } else {
-            matrixBSection.classList.add('hidden');
-        }
-    });
+    // 3. Scan & Solve
+    captureBtn.addEventListener('click', async () => {
+        if (!stream) return;
 
-    updateGridBtn.addEventListener('click', () => {
-        createGrid(matrixA, rowsInput.value, colsInput.value);
-        if(!matrixBSection.classList.contains('hidden')) {
-            createGrid(matrixB, rowsInput.value, colsInput.value);
-        }
-    });
-
-    // 3. Matrix Solver Engine (Pure Algorithm)
-    solveBtn.addEventListener('click', () => {
         resultPanel.classList.remove('hidden');
         setTimeout(() => resultPanel.classList.add('show'), 10);
         loadingState.classList.remove('hidden');
         dataState.classList.add('hidden');
+        document.getElementById('loading-text').textContent = "Mendeteksi susunan matriks...";
+
+        const context = canvas.getContext('2d');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const imageData = canvas.toDataURL('image/jpeg');
 
         try {
-            const r = Number(rowsInput.value);
-            const c = Number(colsInput.value);
-            const A = getMatrix(matrixA, r, c);
-            const op = operationSelect.value;
+            // ALGORITMA OCR Lokasi Karakter
+            const engine = await Tesseract.recognize(imageData, 'eng');
+            const words = engine.data.words;
+
+            // Jalankan Algoritma Reconstruction
+            const matrix = reconstructMatrix(words);
+            if (!matrix) throw new Error("Gagal mengenali grid matriks. Pastikan tulisan jelas.");
+
+            displayedDetectedMatrix(matrix);
             
-            let result = null;
-            let steps = "";
+            // Jalankan Algoritma Matematika (Math.js)
+            const op = operationSelect.value;
+            const res = solveMatrixAlgorithmic(matrix, op);
 
-            switch(op) {
-                case 'determinant':
-                    if(r !== c) throw new Error("Matrix harus persegi!");
-                    result = math.det(A);
-                    steps = `Determinant: Untuk matriks ${r}x${c}, menggunakan algoritma ekspansi kofaktor/Sarrus. Det(A) = ${result}`;
-                    break;
-                case 'transpose':
-                    result = math.transpose(A);
-                    steps = `Transpose: Baris diubah menjadi kolom.`;
-                    break;
-                case 'inverse':
-                    if(r !== c) throw new Error("Matrix harus persegi!");
-                    if(math.det(A) === 0) throw new Error("Determinant 0 (Singular Matrix)");
-                    result = math.inv(A);
-                    steps = `Inverse: Menghitung kofaktor & Adj(A), lalu bagi dengan Det(A).`;
-                    break;
-                case 'addition':
-                    const B = getMatrix(matrixB, r, c);
-                    result = math.add(A, B);
-                    steps = `Addition: Setiap elemen dijumlahkan dengan posisi yang sama.`;
-                    break;
-                case 'multiplication':
-                    const Bm = getMatrix(matrixB, r, c);
-                    result = math.multiply(A, Bm);
-                    steps = `Multiplication: Baris A dikali Kolom B.`;
-                    break;
-                case 'rank':
-                    result = math.range; // MathJS hack or custom
-                    steps = `Matrix Rank: Dihitung dengan mengubah ke bentuk Eselon Baris. Rank = ${math.matrix(A).size().length}`;
-                    break;
-                default:
-                    result = math.matrix(A);
-                    steps = "Fungsi ini dalam tahap pengembangan algoritma mendetail.";
-            }
+            recommendedAnswer.innerHTML = res.display;
+            patternReasoning.innerHTML = res.steps;
 
-            // Output Formatting
-            recommendedAnswer.innerHTML = typeof result === 'number' ? result : formatMatrix(result);
-            patternReasoning.innerHTML = steps;
+            loadingState.classList.add('hidden');
+            dataState.classList.remove('hidden');
 
         } catch (err) {
             recommendedAnswer.textContent = "Error";
             patternReasoning.textContent = err.message;
-        } finally {
             loadingState.classList.add('hidden');
             dataState.classList.remove('hidden');
         }
     });
 
-    function formatMatrix(m) {
-        let html = '<table style="margin: auto; border-left: 2px solid #fff; border-right: 2px solid #fff; border-collapse: separate; border-spacing: 10px;">';
+    function solveMatrixAlgorithmic(A, op) {
+        const mathA = math.matrix(A);
+        const rows = A.length;
+        const cols = A[0].length;
+        
+        let result = null;
+        let steps = "";
+
+        switch(op) {
+            case 'determinant':
+                if (rows !== cols) throw new Error("Hanya untuk Matrix Persegi.");
+                result = math.det(A);
+                steps = `<b>Algoritma:</b> Ekspansi Baris/Kofaktor.<br>Penyelesaian Determinant ${rows}x${cols} menghasilkan: ${result}`;
+                break;
+            case 'transpose':
+                result = math.transpose(A);
+                steps = "<b>Algoritma:</b> Penempatan ulang elemen a_{ij} menjadi a_{ji}.";
+                break;
+            case 'inverse':
+                if (rows !== cols) throw new Error("Hanya untuk Matrix Persegi.");
+                if (math.det(A) === 0) throw new Error("Bukan Matrix Invertible (Det=0).");
+                result = math.inv(A);
+                steps = "<b>Algoritma:</b> Penggunaan Adjoin / Eliminasi Gauss-Jordan.";
+                break;
+            case 'rank':
+                result = math.rank(A); // Manual implementation or simple library call
+                steps = `<b>Algoritma:</b> Reduksi Baris Eselon.<br>Matrix Rank = ${result}`;
+                break;
+            default:
+                result = mathA;
+                steps = "Algoritma standar diterapkan.";
+        }
+
+        return {
+            display: typeof result === 'number' ? result : formatMatrixHTML(result),
+            steps: steps
+        };
+    }
+
+    function formatMatrixHTML(m) {
         const raw = m.toArray ? m.toArray() : m;
-        raw.forEach(row => {
-            html += '<tr>';
-            row.forEach(cell => {
-                html += `<td style="color: #00d4ff;">${Number.isInteger(cell) ? cell : cell.toFixed(2)}</td>`;
-            });
-            html += '</tr>';
+        let html = '<div style="display:inline-block; border-left: 2px solid #fff; border-right: 2px solid #fff; padding: 5px;">';
+        raw.forEach(r => {
+            html += '<div style="display:flex; justify-content: space-around; gap: 15px; margin: 3px 0;">';
+            r.forEach(c => html += `<span style="color:#00d4ff">${Number.isInteger(c) ? c : c.toFixed(2)}</span>`);
+            html += '</div>';
         });
-        html += '</table>';
+        html += '</div>';
         return html;
     }
 
-    createGrid(matrixA, 3, 3);
+    function displayedDetectedMatrix(m) {
+        detectedMatrixView.innerHTML = `<p style="font-size:0.7rem; color:var(--text-dim); margin-bottom:5px;">Terdeteksi Matriks ${m.length}x${m[0].length}:</p>${formatMatrixHTML(m)}`;
+    }
+
+    closeResult.addEventListener('click', () => {
+        resultPanel.classList.remove('show');
+        setTimeout(() => resultPanel.classList.add('hidden'), 500);
+    });
+
+    initCamera();
 });

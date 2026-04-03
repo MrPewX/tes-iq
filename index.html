@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI IQ Solver - Solve Matrices Instantly</title>
-    <meta name="description" content="Aplikasi AI canggih untuk membantu memecahkan pola tes IQ secara real-time.">
+    <title>MATRIX SCANNER PRO - Pure Algorithm</title>
     <link rel="stylesheet" href="css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -13,81 +12,66 @@
     <div class="background-blobs">
         <div class="blob blob-1"></div>
         <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
     </div>
 
     <main class="app-container">
-        <section class="category-section">
+        <section class="category-panel">
+            <label class="label">PILIH OPERASI MATRIKS:</label>
             <select id="matrix-operation" class="glass-select">
-                <option value="addition">Matrix Addition/Subtraction</option>
-                <option value="multiplication">Matrix Multiplication</option>
                 <option value="determinant">Determinant</option>
                 <option value="inverse">Inverse Matrix</option>
+                <option value="multiplication">Matrix Multiplication (2x Matrices)</option>
                 <option value="gauss-jordan">Gauss-Jordan Elimination</option>
                 <option value="cramer">Cramer's Rule</option>
                 <option value="rank">Matrix Rank</option>
-                <option value="power">Matrix Power</option>
                 <option value="transpose">Matrix Transpose</option>
-                <option value="inverse-method">Inverse Matrix Method</option>
+                <option value="addition">Matrix Addition/Subtraction</option>
             </select>
         </section>
 
-        <section class="matrix-input-area">
-            <div class="matrix-grid-controls">
-                <label>Ukuran: </label>
-                <input type="number" id="rows" value="3" min="1" max="5"> x 
-                <input type="number" id="cols" value="3" min="1" max="5">
-                <button id="update-grid" class="small-btn">Update Grid</button>
-            </div>
-            
-            <div id="matrix-container" class="matrix-container">
-                <!-- Matrix A -->
-            </div>
-
-            <div id="matrix-b-section" class="hidden" style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 15px;">
-                <p style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 10px;">Matriks B (Untuk Kali/Tambah/Kurang):</p>
-                <div id="matrix-container-b" class="matrix-container"></div>
-            </div>
-        </section>
-
-        <section class="camera-section" style="margin-top: 20px;">
-            <div class="video-wrapper" style="aspect-ratio: 16/9; height: 150px;">
-                <video id="camera-feed" autoplay playsinline webkit-playsinline muted></video>
+        <section class="camera-section">
+            <div class="video-wrapper">
+                <video id="camera-feed" autoplay playsinline webkit-playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
                 <div class="scan-overlay">
                     <div class="corner top-left"></div>
                     <div class="corner top-right"></div>
                     <div class="corner bottom-left"></div>
                     <div class="corner bottom-right"></div>
+                    <div class="scanning-line"></div>
                 </div>
             </div>
-            <p style="font-size: 0.7rem; color: var(--text-dim); text-align: center; margin-top: 5px;">Gunakan kamera hanya untuk melihat soal asli di kertas.</p>
+            <p class="hint">Arahkan kamera tepat ke kotak matriks di kertas/layar.</p>
         </section>
 
-        <div class="controls" style="margin-top: 20px;">
-            <button id="capture-btn" class="main-btn" title="Solve Matrix">
-                <span class="btn-icon"><i class="fas fa-microchip"></i></span>
-                <span class="btn-text">SOLVE WITH ALGORITHM</span>
+        <div class="controls">
+            <button id="capture-btn" class="main-btn">
+                <span class="btn-icon"><i class="fas fa-expand"></i></span>
+                <span class="btn-text">SCAN & SOLVE MATRIX</span>
             </button>
         </div>
 
         <section id="result-panel" class="result-panel hidden">
             <div class="panel-header">
-                <h3><i class="fas fa-microchip"></i> Math Engine Results</h3>
+                <h3><i class="fas fa-barcode"></i> Matriks Terdeteksi</h3>
                 <button id="close-result" class="close-btn">&times;</button>
             </div>
             <div class="panel-content">
                 <div class="loading-state hidden">
                     <div class="loader"></div>
-                    <p>Menganalisis rumus & menghitung...</p>
+                    <p id="loading-text">Sedang memproses...</p>
                 </div>
                 <div class="data-state">
                     <div class="answer-card">
+                        <span class="label">ANALISIS MATRIKS</span>
+                        <div id="detected-matrix-view" class="matrix-view"></div>
+                    </div>
+                    <div class="answer-card accent">
                         <span class="label">HASIL AKHIR</span>
                         <h2 id="recommended-answer">?</h2>
                     </div>
                     <div class="reasoning-card">
-                        <span class="label">Langkah Penyelesaian</span>
-                        <div id="pattern-reasoning" style="text-align: left; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px;">Menunggu hasil...</div>
+                        <span class="label">Langkah Penyelesaian (Algoritma)</span>
+                        <div id="pattern-reasoning" class="steps-view"></div>
                     </div>
                 </div>
             </div>
