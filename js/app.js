@@ -1,11 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // UI Elements
     const btnScanTab = document.getElementById('btn-scan');
     const btnManualTab = document.getElementById('btn-manual');
     const scanView = document.getElementById('scan-view');
     const manualView = document.getElementById('manual-view');
     const btnText = document.getElementById('btn-text');
     const matrixA = document.getElementById('matrix-container');
+    const matrixB = document.getElementById('matrix-container-b');
+    const matrixBSection = document.getElementById('matrix-b-section');
     const rowsInput = document.getElementById('rows');
     const colsInput = document.getElementById('cols');
     const updateGridBtn = document.getElementById('update-grid');
@@ -23,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMode = 'scan';
     let stream = null;
 
-    // --- MATH UTILS ---
+    // --- UTILS ---
     function formatFraction(val) {
         if (Math.abs(val) < 1e-10) return "0";
         try {
@@ -32,121 +33,128 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { return val.toFixed(2); }
     }
 
-    function isTriangular(A) {
-        let n = A.length;
-        let isUpper = true, isLower = true;
-        for (let i = 0; i < n; i++) {
-            for (let j = 0; j < n; j++) {
-                if (i > j && Math.abs(A[i][j]) > 1e-10) isUpper = false;
-                if (i < j && Math.abs(A[i][j]) > 1e-10) isLower = false;
-            }
-        }
-        return isUpper || isLower;
-    }
-
-    function formatMatrixHTML(matrix, notes = [], augmented = false) {
-        let rows = matrix.length;
-        let cols = matrix[0].length;
+    function formatMatrixHTML(matrix, notes = [], augIdx = 0) {
+        let rows = matrix.length, cols = matrix[0].length;
         let html = `<div style="width:100%; overflow-x:auto; margin:10px 0; padding-bottom:10px;">`;
         html += `<div style="display:inline-flex; align-items:center; min-width:100%; justify-content:center; gap:10px; padding:0 20px;">`;
-        
-        // Matrix Part
-        html += `<div style="border-left:2px solid #fff; border-right:2px solid #fff; padding:0 5px; position:relative;">`;
+        html += `<div style="border-left:2px solid #fff; border-right:2px solid #fff; padding:0 8px;">`;
         matrix.forEach((row, i) => {
             html += `<div style="display:flex; gap:12px; height:30px; align-items:center;">`;
             row.forEach((cell, j) => {
-                if (augmented && j === cols - 1) {
-                    html += `<div style="width:1px; height:20px; background:rgba(255,255,255,0.4); margin:0 5px;"></div>`;
+                if (augIdx > 0 && j === augIdx) {
+                    html += `<div style="width:1px; height:20px; background:rgba(255,255,255,0.3); margin:0 5px;"></div>`;
                 }
-                let color = (i === j) ? "#f1c40f" : "#00d4ff"; 
-                html += `<span style="color:${color}; min-width:42px; text-align:center; font-size:0.75rem;">${formatFraction(cell)}</span>`;
+                html += `<span style="color:${i===j?'#f1c40f':'#00d4ff'}; min-width:42px; text-align:center; font-size:0.75rem;">${formatFraction(cell)}</span>`;
             });
             html += `</div>`;
         });
         html += `</div>`;
-
-        // OBE Notes Part
-        html += `<div style="display:flex; flex-direction:column; justify-content:center; padding-left:10px; border-left:1px dashed #444;">`;
-        matrix.forEach((_, i) => {
-            html += `<div style="height:30px; display:flex; align-items:center; color:#ff00c8; font-size:0.7rem; font-weight:700; white-space:nowrap;">${notes[i] || ""}</div>`;
-        });
+        html += `<div style="display:flex; flex-direction:column; justify-content:center; padding-left:10px;">`;
+        matrix.forEach((_, i) => html += `<div style="height:30px; display:flex; align-items:center; color:#ff00c8; font-size:0.7rem; font-weight:700;">${notes[i] || ""}</div>`);
         html += `</div></div></div>`;
         return html;
     }
 
-    // --- SOLVER ENGINE ---
-    function solveMatrixComplex(originalMatrix, op) {
+    // --- COMPLEX SOLVER ENGINE (ALL OPERATIONS) ---
+    function solveAllOperations(originalMatrix, secondMatrix, op) {
         let A = JSON.parse(JSON.stringify(originalMatrix));
-        let r = A.length, c = A[0].length;
+        let rows = A.length, cols = A[0].length;
         let stepsHTML = `<div style="padding-top:10px; text-align:center;">`;
-        let swapCount = 0;
-        let isGaussJordan = (op === 'gauss-jordan');
 
-        function logStep(msg, matrix, notes) {
-            stepsHTML += `<div style="margin-bottom:20px; padding:10px 0; background:rgba(255,255,255,0.02); border-radius:12px;">`;
-            stepsHTML += `<p style="font-size:0.6rem; color:var(--secondary); font-weight:800; text-transform:uppercase;">[ ${msg} ]</p>`;
-            stepsHTML += formatMatrixHTML(matrix, notes, isGaussJordan);
-            stepsHTML += `</div>`;
-            stepsHTML += `<div style="color:var(--text-dim); margin-bottom:10px;">↓</div>`;
+        function logStep(msg, matrix, notes = [], aIdx = 0) {
+            stepsHTML += `<div style="margin-bottom:20px; padding:10px; border-radius:12px; background:rgba(255,255,255,0.02);">`;
+            stepsHTML += `<p style="font-size:0.6rem; color:var(--secondary); font-weight:800;">[ ${msg} ]</p>`;
+            stepsHTML += formatMatrixHTML(matrix, notes, aIdx);
+            stepsHTML += `</div><div style="margin-bottom:10px; opacity:0.3;">↓</div>`;
         }
 
-        logStep("MATRIKS AWAL", A, []);
-
-        if (op === 'determinant') {
-            if (r !== c) throw new Error("Matrix harus persegi.");
-            if (!isTriangular(A)) {
-                for (let j = 0; j < c; j++) {
+        switch(op) {
+            case 'determinant':
+                let swapCount = 0; let detRes = 1; let diag = [];
+                logStep("MATRIKS AWAL (REDUKSI SEGITIGA ATAS)", A);
+                for (let j = 0; j < cols; j++) {
                     let maxR = j;
-                    for(let i=j+1; i<r; i++) if(Math.abs(A[i][j]) > Math.abs(A[maxR][j])) maxR = i;
+                    for(let i=j+1; i<rows; i++) if(Math.abs(A[i][j]) > Math.abs(A[maxR][j])) maxR = i;
                     if(Math.abs(A[maxR][j]) < 1e-10) continue;
                     if(maxR !== j) { [A[j], A[maxR]] = [A[maxR], A[j]]; swapCount++; logStep("TUKAR BARIS", A, {[j]:`R${j+1} ↔ R${maxR+1}`}); }
-                    let notes = [];
-                    for(let i=j+1; i<r; i++) {
+                    let ns = [];
+                    for(let i=j+1; i<rows; i++) {
                         let f = A[i][j] / A[j][j];
-                        if(Math.abs(f) > 1e-10) { A[i] = A[i].map((x,idx) => x - f * A[j][idx]); notes[i] = `R${i+1}-(${formatFraction(f)})R${j+1}`; }
+                        if(Math.abs(f) > 1e-10) { A[i] = A[i].map((x,idx) => x - f * A[j][idx]); ns[i] = `R${i+1}-(${formatFraction(f)})R${j+1}`; }
                     }
-                    if(notes.length > 0) logStep("ELIMINASI BAWAH", A, notes);
+                    if(ns.length > 0) logStep("ELIMINASI BAWAH", A, ns);
                 }
-            } else { logStep("SDH BENTUK SEGITIGA", A, []); }
+                for(let i=0; i<rows; i++) diag.push(A[i][i]);
+                let totalDet = Math.pow(-1, swapCount) * diag.reduce((p,v)=>p*v, 1);
+                stepsHTML += `<div style="border:2px solid var(--primary); border-radius:15px; padding:15px;">`;
+                stepsHTML += `<h2 style="margin-bottom:10px;">Δ = ${formatFraction(totalDet)}</h2>`;
+                stepsHTML += `<p style="font-size:0.75rem;">Formula: (-1)<sup>${swapCount}</sup> × (${diag.map(v=>formatFraction(v)).join(" × ")})</p></div>`;
+                break;
 
-            let diag = []; let termDet = Math.pow(-1, swapCount);
-            for(let i=0; i<r; i++) diag.push(A[i][i]);
-            let totalDet = termDet * diag.reduce((p,v)=>p*v, 1);
-            
-            let formulaStr = `(${termDet}) × ${diag.map(v => `(${formatFraction(v)})`).join(" × ")}`;
-
-            stepsHTML += `<div style="border-top:2px solid var(--primary); padding-top:20px; background:rgba(0,129,255,0.05); border-radius:15px; padding:15px;">`;
-            stepsHTML += `<h2 style="color:#fff; font-weight:800; margin-bottom:10px;">Δ = ${formatFraction(totalDet)}</h2>`;
-            stepsHTML += `<p style="font-size:0.75rem; color:var(--text-dim);">Rumus: Δ = (-1)<sup>${swapCount}</sup> × Produk Diagonal</p>`;
-            stepsHTML += `<p style="font-size:0.8rem; color:var(--secondary); font-weight:600; margin-top:5px;">Δ = ${formulaStr} = ${formatFraction(totalDet)}</p>`;
-            stepsHTML += `</div>`;
-
-        } else if (isGaussJordan) {
-            let pivot = 0;
-            for(let j=0; j < c-1 && pivot < r; j++) {
-                let maxR = pivot;
-                for(let i=pivot+1; i<r; i++) if(Math.abs(A[i][j]) > Math.abs(A[maxR][j])) maxR = i;
-                if(Math.abs(A[maxR][j]) < 1e-10) continue;
-                if(maxR !== pivot) { [A[pivot], A[maxR]] = [A[maxR], A[pivot]]; logStep("SWAP", A, {[pivot]:`R${pivot+1} ↔ R${maxR+1}`}); }
-                let div = A[pivot][j];
-                if(Math.abs(div-1) > 1e-10) { A[pivot] = A[pivot].map(x => x/div); logStep("NORMALISASI", A, {[pivot]:`R${pivot+1} / ${formatFraction(div)}`}); }
-                let ns = [];
-                for(let i=0; i<r; i++) {
-                    if(i !== pivot) {
-                        let f = A[i][j];
-                        if(Math.abs(f) > 1e-10) { A[i] = A[i].map((x,idx) => x - f * A[pivot][idx]); ns[i] = `R${i+1}-(${formatFraction(f)})R${pivot+1}`; }
+            case 'inverse':
+                if(rows !== cols) throw new Error("Inverse hanya untuk matriks persegi.");
+                for(let i=0; i<rows; i++) { for(let j=0; j<rows; j++) A[i].push(i===j? 1 : 0); }
+                let augIdx = rows;
+                logStep("AUGMENTED MATRIX [A | I]", A, [], augIdx);
+                // FULL GAUSS-JORDAN
+                let p = 0;
+                for(let j=0; j<augIdx && p<rows; j++) {
+                    let mx = p;
+                    for(let i=p+1; i<rows; i++) if(Math.abs(A[i][j]) > Math.abs(A[mx][j])) mx=i;
+                    if(Math.abs(A[mx][j]) < 1e-10) continue;
+                    if(mx!==p) {[A[p],A[mx]]=[A[mx],A[p]]; logStep("SWAP", A, {[p]:`R${p+1}↔R${mx+1}`}, augIdx);}
+                    let dv = A[p][j];
+                    if(Math.abs(dv-1)>1e-10) {A[p]=A[p].map(x=>x/dv); logStep("NORMALISASI", A, {[p]:`R${p+1} / ${formatFraction(dv)}`}, augIdx);}
+                    let ens = [];
+                    for(let i=0; i<rows; i++) {
+                        if(i!==p) {
+                            let f = A[i][j];
+                            if(Math.abs(f)>1e-10) {A[i]=A[i].map((x,idx)=>x-f*A[p][idx]); ens[i]=`R${i+1}-(${formatFraction(f)})R${p+1}`;}
+                        }
                     }
+                    if(ens.length>0) logStep("ELIMINASI", A, ens, augIdx);
+                    p++;
                 }
-                if(ns.length > 0) logStep("ELIMINASI", A, ns);
-                pivot++;
-            }
-            stepsHTML += `<div style="border-top:2px solid var(--primary); padding-top:20px;"><h3>GAUSS-JORDAN DONE</h3></div>`;
+                let inv = A.map(r=>r.slice(augIdx));
+                stepsHTML += `<h3>MATRIX INVERSE (A⁻¹):</h3>` + formatMatrixHTML(inv);
+                break;
+
+            case 'transpose':
+                let trans = [];
+                for(let j=0; j<cols; j++) { let row = []; for(let i=0; i<rows; i++) row.push(A[i][j]); trans.push(row); }
+                stepsHTML += `<h3>TRANSPOSE (Aᵀ):</h3>` + formatMatrixHTML(trans);
+                break;
+
+            case 'rank':
+                let rank = 0;
+                // Simple Row Echelon for Rank
+                for(let j=0; j<cols && rank<rows; j++) {
+                    let mx=rank;
+                    for(let i=rank+1; i<rows; i++) if(Math.abs(A[i][j])>Math.abs(A[mx][j])) mx=i;
+                    if(Math.abs(A[mx][j])<1e-10) continue;
+                    [A[rank],A[mx]]=[A[mx],A[rank]];
+                    for(let i=rank+1; i<rows; i++) {
+                        let f = A[i][j]/A[rank][j];
+                        A[i] = A[i].map((x,idx)=>x-f*A[rank][idx]);
+                    }
+                    rank++;
+                }
+                stepsHTML += `<div style="font-size:2rem; font-weight:800;">Rank = ${rank}</div>`;
+                break;
+
+            case 'addition':
+                if(!secondMatrix) throw new Error("Pilih menu MANUAL untuk penambahan.");
+                let addRes = A.map((r,i)=>r.map((c,j)=>c + secondMatrix[i][j]));
+                stepsHTML += `<h3>RESULT (A + B):</h3>` + formatMatrixHTML(addRes);
+                break;
+
+            default:
+                stepsHTML += `<p>Gunakan Operasi Lain (Det/Inv/Rank/Transpose).</p>`;
         }
-
         return stepsHTML + `</div>`;
     }
 
-    // --- UI & GRID LOGIC ---
+    // --- UI LOGIC ---
     function createGrid(container, r, c) {
         container.innerHTML = ''; container.style.gridTemplateColumns = `repeat(${c}, 50px)`;
         for(let i=0; i < r*c; i++) {
@@ -155,6 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
             container.appendChild(input);
         }
     }
+    
     updateGridBtn.addEventListener('click', () => createGrid(matrixA, Number(rowsInput.value), Number(colsInput.value)));
 
     captureBtn.addEventListener('click', async () => {
@@ -162,20 +171,23 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { resultPanel.classList.add('show'); document.querySelector('.panel-content').scrollTop = 0; }, 10);
         loadingState.classList.remove('hidden'); dataState.classList.add('hidden');
         try {
-            let m;
+            let m; let mB = null;
             if (currentMode === 'scan') {
                 const ctx = canvas.getContext('2d'); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const engine = await Tesseract.recognize(canvas.toDataURL('image/jpeg'), 'eng');
                 m = reconstructMatrix(engine.data.words);
             } else {
-                const ins = matrixA.querySelectorAll('input'); 
                 const r = Number(rowsInput.value), col = Number(colsInput.value);
-                m = []; for(let i=0; i<r; i++) {
-                    let row = []; for(let j=0; j<col; j++) row.push(Number(ins[i*col + j].value)); m.push(row);
+                const insA = matrixA.querySelectorAll('input');
+                m = []; for(let i=0; i<r; i++) { let row = []; for(let j=0; j<col; j++) row.push(Number(insA[i*col+j].value)); m.push(row); }
+                const insB = matrixB.querySelectorAll('input');
+                if(insB.length > 0) {
+                    mB = []; for(let i=0; i<r; i++) { let row = []; for(let j=0; j<col; j++) row.push(Number(insB[i*col+j].value)); mB.push(row); }
                 }
             }
-            patternReasoning.innerHTML = solveMatrixComplex(m, operationSelect.value);
+            if (!m) throw new Error("Gagal membaca matriks.");
+            patternReasoning.innerHTML = solveAllOperations(m, mB, operationSelect.value);
             recommendedAnswer.innerHTML = "SELESAI";
             loadingState.classList.add('hidden'); dataState.classList.remove('hidden');
         } catch (e) { patternReasoning.textContent = e.message; loadingState.classList.add('hidden'); dataState.classList.remove('hidden'); }
