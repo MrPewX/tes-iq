@@ -15,12 +15,17 @@
     </div>
 
     <main class="app-container">
+        <nav class="tab-nav">
+            <button id="btn-scan" class="tab-btn active"><i class="fas fa-camera"></i> SCAN</button>
+            <button id="btn-manual" class="tab-btn"><i class="fas fa-keyboard"></i> MANUAL</button>
+        </nav>
+
         <section class="category-panel">
             <label class="label">PILIH OPERASI MATRIKS:</label>
             <select id="matrix-operation" class="glass-select">
                 <option value="determinant">Determinant</option>
                 <option value="inverse">Inverse Matrix</option>
-                <option value="multiplication">Matrix Multiplication (2x Matrices)</option>
+                <option value="multiplication">Matrix Multiplication</option>
                 <option value="gauss-jordan">Gauss-Jordan Elimination</option>
                 <option value="cramer">Cramer's Rule</option>
                 <option value="rank">Matrix Rank</option>
@@ -29,30 +34,54 @@
             </select>
         </section>
 
-        <section class="camera-section">
-            <div class="video-wrapper">
-                <video id="camera-feed" autoplay playsinline webkit-playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
-                <div class="scan-overlay">
-                    <div class="corner top-left"></div>
-                    <div class="corner top-right"></div>
-                    <div class="corner bottom-left"></div>
-                    <div class="corner bottom-right"></div>
-                    <div class="scanning-line"></div>
+        <!-- SCAN TAB -->
+        <div id="scan-view">
+            <section class="camera-section">
+                <div class="video-wrapper">
+                    <video id="camera-feed" autoplay playsinline webkit-playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+                    <div class="scan-overlay">
+                        <div class="corner top-left"></div>
+                        <div class="corner top-right"></div>
+                        <div class="corner bottom-left"></div>
+                        <div class="corner bottom-right"></div>
+                        <div class="scanning-line"></div>
+                    </div>
                 </div>
-            </div>
-            <p class="hint">Arahkan kamera tepat ke kotak matriks di kertas/layar.</p>
-        </section>
+                <p class="hint">Arahkan kamera tepat ke kotak matriks.</p>
+            </section>
+        </div>
 
-        <div class="controls">
+        <!-- MANUAL TAB -->
+        <div id="manual-view" class="hidden">
+            <section class="matrix-input-area">
+                <div class="matrix-grid-controls">
+                    <label>Ukuran: </label>
+                    <input type="number" id="rows" value="3" min="1" max="5"> x 
+                    <input type="number" id="cols" value="3" min="1" max="5">
+                    <button id="update-grid" class="small-btn">Update Grid</button>
+                </div>
+                
+                <div id="matrix-container" class="matrix-container">
+                    <!-- Matrix A -->
+                </div>
+
+                <div id="matrix-b-section" class="hidden" style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 15px;">
+                    <p style="font-size: 0.7rem; color: var(--text-dim); margin-bottom: 10px;">Matriks B (Untuk Kali/Tambah):</p>
+                    <div id="matrix-container-b" class="matrix-container"></div>
+                </div>
+            </section>
+        </div>
+
+        <div class="controls" style="margin-top: 30px;">
             <button id="capture-btn" class="main-btn">
-                <span class="btn-icon"><i class="fas fa-expand"></i></span>
-                <span class="btn-text">SCAN & SOLVE MATRIX</span>
+                <span class="btn-icon"><i class="fas fa-microchip"></i></span>
+                <span class="btn-text" id="btn-text">SCAN & SOLVE</span>
             </button>
         </div>
 
         <section id="result-panel" class="result-panel hidden">
             <div class="panel-header">
-                <h3><i class="fas fa-barcode"></i> Matriks Terdeteksi</h3>
+                <h3><i class="fas fa-barcode"></i> Hasil Analisis</h3>
                 <button id="close-result" class="close-btn">&times;</button>
             </div>
             <div class="panel-content">
@@ -62,7 +91,7 @@
                 </div>
                 <div class="data-state">
                     <div class="answer-card">
-                        <span class="label">ANALISIS MATRIKS</span>
+                        <span class="label">MATRIKS TERDETEKSI</span>
                         <div id="detected-matrix-view" class="matrix-view"></div>
                     </div>
                     <div class="answer-card accent">
@@ -70,8 +99,8 @@
                         <h2 id="recommended-answer">?</h2>
                     </div>
                     <div class="reasoning-card">
-                        <span class="label">Langkah Penyelesaian (Algoritma)</span>
-                        <div id="pattern-reasoning" class="steps-view"></div>
+                        <span class="label">LANGKAH PENYELESAIAN</span>
+                        <div id="pattern-reasoning" class="steps-view" style="font-size: 0.8rem; text-align: left;"></div>
                     </div>
                 </div>
             </div>

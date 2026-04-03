@@ -1,41 +1,95 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Navigasi Tab
+    const btnScanTab = document.getElementById('btn-scan');
+    const btnManualTab = document.getElementById('btn-manual');
+    const scanView = document.getElementById('scan-view');
+    const manualView = document.getElementById('manual-view');
+    const btnText = document.getElementById('btn-text');
+
+    // Matrix Elements
+    const matrixA = document.getElementById('matrix-container');
+    const matrixB = document.getElementById('matrix-container-b');
+    const matrixBSection = document.getElementById('matrix-b-section');
+    const rowsInput = document.getElementById('rows');
+    const colsInput = document.getElementById('cols');
+    const updateGridBtn = document.getElementById('update-grid');
+
+    // General App Elements
     const video = document.getElementById('camera-feed');
     const canvas = document.getElementById('capture-canvas');
     const captureBtn = document.getElementById('capture-btn');
     const resultPanel = document.getElementById('result-panel');
     const closeResult = document.getElementById('close-result');
-    const loadingState = document.querySelector('.loading-state');
-    const dataState = document.querySelector('.data-state');
+    const operationSelect = document.getElementById('matrix-operation');
     const recommendedAnswer = document.getElementById('recommended-answer');
     const patternReasoning = document.getElementById('pattern-reasoning');
     const detectedMatrixView = document.getElementById('detected-matrix-view');
-    const operationSelect = document.getElementById('matrix-operation');
+    const loadingState = document.querySelector('.loading-state');
+    const dataState = document.querySelector('.data-state');
 
+    let currentMode = 'scan';
     let stream = null;
 
-    // 1. Inisialisasi Kamera
+    // --- TAB SWITCHING ---
+    btnScanTab.addEventListener('click', () => {
+        currentMode = 'scan';
+        btnScanTab.classList.add('active');
+        btnManualTab.classList.remove('active');
+        scanView.classList.remove('hidden');
+        manualView.classList.add('hidden');
+        btnText.textContent = "SCAN & SOLVE";
+    });
+
+    btnManualTab.addEventListener('click', () => {
+        currentMode = 'manual';
+        btnScanTab.classList.remove('active');
+        btnManualTab.classList.add('active');
+        scanView.classList.add('hidden');
+        manualView.classList.remove('hidden');
+        btnText.textContent = "CALCULATE MANUAL";
+        createGrid(matrixA, rowsInput.value, colsInput.value);
+    });
+
+    // --- CAMERA INIT ---
     async function initCamera() {
         try {
-            const constraints = {
-                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: false
-            };
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 1280, height: 720 } });
             video.srcObject = stream;
-        } catch (err) {
-            console.error('Camera access failed:', err);
-            alert('Gagal mengakses kamera. Mohon izinkan akses kamera.');
+        } catch (e) { alert('Kamera tidak dapat diakses.'); }
+    }
+
+    // --- GRID MANUAL LOGIC ---
+    function createGrid(container, r, c) {
+        container.innerHTML = '';
+        container.style.gridTemplateColumns = `repeat(${c}, 50px)`;
+        for(let i=0; i < r*c; i++) {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'matrix-cell';
+            input.value = '0';
+            container.appendChild(input);
         }
     }
 
-    // 2. Algoritma Grid Reconstruction
-    // Mengubah data OCR mentah menjadi Matriks yang valid melalui ALGORITMA kordinat
+    updateGridBtn.addEventListener('click', () => {
+        createGrid(matrixA, rowsInput.value, colsInput.value);
+        if(!matrixBSection.classList.contains('hidden')) createGrid(matrixB, rowsInput.value, colsInput.value);
+    });
+
+    operationSelect.addEventListener('change', () => {
+        const op = operationSelect.value;
+        if(['addition', 'multiplication'].includes(op)) {
+            matrixBSection.classList.remove('hidden');
+            if(currentMode === 'manual') createGrid(matrixB, rowsInput.value, colsInput.value);
+        } else {
+            matrixBSection.classList.add('hidden');
+        }
+    });
+
+    // --- RECONSTRUCTOR ALGORITHM ---
     function reconstructMatrix(words) {
-        // Filter hanya angka (boleh negatif atau desimal)
         const numbers = words.filter(w => /^-?\d+([.,]\d+)?$/.test(w.text));
         if (numbers.length === 0) return null;
-
-        // Kelompokkan dalam baris berdasarkan kordinat Y (toleransi 10% tinggi kata)
         const rows = [];
         numbers.forEach(num => {
             let found = false;
@@ -49,115 +103,95 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (!found) rows.push([num]);
         });
-
-        // Urutkan Baris (Atas -> Bawah)
         rows.sort((a, b) => a[0].bbox.y0 - b[0].bbox.y0);
-
-        // Urutkan Angka dalam setiap Baris (Kiri -> Kanan)
-        const matrixData = rows.map(row => {
+        return rows.map(row => {
             row.sort((a, b) => a.bbox.x0 - b.bbox.x0);
             return row.map(n => Number(n.text.replace(',', '.')));
         });
-
-        // Normalisasi ukuran matriks agar seragam (Padding 0 jika ada baris yang ompong)
-        const maxCols = Math.max(...matrixData.map(r => r.length));
-        return matrixData.map(r => {
-            while (r.length < maxCols) r.push(0);
-            return r;
-        });
     }
 
-    // 3. Scan & Solve
-    captureBtn.addEventListener('click', async () => {
-        if (!stream) return;
+    // --- IMAGE PRE-PROCESSING (FOR BETTER SCAN) ---
+    function preprocessImage(ctx, w, h) {
+        const imgData = ctx.getImageData(0, 0, w, h);
+        for (let i = 0; i < imgData.data.length; i += 4) {
+            const avg = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
+            const res = avg > 128 ? 255 : 0; // Binarization
+            imgData.data[i] = imgData.data[i+1] = imgData.data[i+2] = res;
+        }
+        ctx.putImageData(imgData, 0, 0);
+    }
 
+    // --- SOLVE BUTTON ACTION ---
+    captureBtn.addEventListener('click', async () => {
         resultPanel.classList.remove('hidden');
         setTimeout(() => resultPanel.classList.add('show'), 10);
         loadingState.classList.remove('hidden');
         dataState.classList.add('hidden');
-        document.getElementById('loading-text').textContent = "Mendeteksi susunan matriks...";
-
-        const context = canvas.getContext('2d');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        const imageData = canvas.toDataURL('image/jpeg');
 
         try {
-            // ALGORITMA OCR Lokasi Karakter
-            const engine = await Tesseract.recognize(imageData, 'eng');
-            const words = engine.data.words;
-
-            // Jalankan Algoritma Reconstruction
-            const matrix = reconstructMatrix(words);
-            if (!matrix) throw new Error("Gagal mengenali grid matriks. Pastikan tulisan jelas.");
+            let matrix = null;
+            if (currentMode === 'scan') {
+                const context = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                // Pre-process for Tesseract
+                preprocessImage(context, canvas.width, canvas.height);
+                const engine = await Tesseract.recognize(canvas.toDataURL('image/jpeg'), 'eng');
+                matrix = reconstructMatrix(engine.data.words);
+                if (!matrix) throw new Error("Gagal membaca matriks. Coba arahkan lebih jelas atau gunakan mode MANUAL.");
+            } else {
+                matrix = getMatrixDataFromGrid(matrixA, rowsInput.value, colsInput.value);
+            }
 
             displayedDetectedMatrix(matrix);
-            
-            // Jalankan Algoritma Matematika (Math.js)
-            const op = operationSelect.value;
-            const res = solveMatrixAlgorithmic(matrix, op);
-
+            const res = solveMatrixAlgorithmic(matrix, operationSelect.value);
             recommendedAnswer.innerHTML = res.display;
             patternReasoning.innerHTML = res.steps;
 
             loadingState.classList.add('hidden');
             dataState.classList.remove('hidden');
-
         } catch (err) {
-            recommendedAnswer.textContent = "Error";
+            recommendedAnswer.textContent = "Oops!";
             patternReasoning.textContent = err.message;
             loadingState.classList.add('hidden');
             dataState.classList.remove('hidden');
         }
     });
 
-    function solveMatrixAlgorithmic(A, op) {
-        const mathA = math.matrix(A);
-        const rows = A.length;
-        const cols = A[0].length;
-        
-        let result = null;
-        let steps = "";
-
-        switch(op) {
-            case 'determinant':
-                if (rows !== cols) throw new Error("Hanya untuk Matrix Persegi.");
-                result = math.det(A);
-                steps = `<b>Algoritma:</b> Ekspansi Baris/Kofaktor.<br>Penyelesaian Determinant ${rows}x${cols} menghasilkan: ${result}`;
-                break;
-            case 'transpose':
-                result = math.transpose(A);
-                steps = "<b>Algoritma:</b> Penempatan ulang elemen a_{ij} menjadi a_{ji}.";
-                break;
-            case 'inverse':
-                if (rows !== cols) throw new Error("Hanya untuk Matrix Persegi.");
-                if (math.det(A) === 0) throw new Error("Bukan Matrix Invertible (Det=0).");
-                result = math.inv(A);
-                steps = "<b>Algoritma:</b> Penggunaan Adjoin / Eliminasi Gauss-Jordan.";
-                break;
-            case 'rank':
-                result = math.rank(A); // Manual implementation or simple library call
-                steps = `<b>Algoritma:</b> Reduksi Baris Eselon.<br>Matrix Rank = ${result}`;
-                break;
-            default:
-                result = mathA;
-                steps = "Algoritma standar diterapkan.";
+    function getMatrixDataFromGrid(container, r, c) {
+        const ins = container.querySelectorAll('input');
+        const m = [];
+        for(let i=0; i<r; i++) {
+            const row = [];
+            for(let j=0; j<c; j++) row.push(Number(ins[i*c + j].value));
+            m.push(row);
         }
+        return m;
+    }
 
-        return {
-            display: typeof result === 'number' ? result : formatMatrixHTML(result),
-            steps: steps
-        };
+    function solveMatrixAlgorithmic(A, op) {
+        try {
+            let result = null;
+            let steps = "Penyelesaian menggunakan algoritma matriks standar.";
+            if (op === 'determinant') result = math.det(A);
+            else if (op === 'inverse') result = math.inv(A);
+            else if (op === 'transpose') result = math.transpose(A);
+            else if (op === 'rank') result = math.rank(A);
+            
+            return {
+                display: typeof result === 'number' ? result.toFixed(2) : formatMatrixHTML(result),
+                steps: steps
+            };
+        } catch (e) { throw new Error("Kesalahan hitung: Matriks mungkin tidak memiliki solusi (Det=0)."); }
     }
 
     function formatMatrixHTML(m) {
         const raw = m.toArray ? m.toArray() : m;
         let html = '<div style="display:inline-block; border-left: 2px solid #fff; border-right: 2px solid #fff; padding: 5px;">';
         raw.forEach(r => {
-            html += '<div style="display:flex; justify-content: space-around; gap: 15px; margin: 3px 0;">';
-            r.forEach(c => html += `<span style="color:#00d4ff">${Number.isInteger(c) ? c : c.toFixed(2)}</span>`);
+            html += '<div style="display:flex; justify-content: center; gap: 15px; margin: 3px 0;">';
+            r.forEach(c => html += `<span>${Number.isInteger(c) ? c : c.toFixed(2)}</span>`);
             html += '</div>';
         });
         html += '</div>';
@@ -165,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayedDetectedMatrix(m) {
-        detectedMatrixView.innerHTML = `<p style="font-size:0.7rem; color:var(--text-dim); margin-bottom:5px;">Terdeteksi Matriks ${m.length}x${m[0].length}:</p>${formatMatrixHTML(m)}`;
+        detectedMatrixView.innerHTML = `<p style="font-size:0.7rem; color:var(--text-dim);">Matrix ${m.length}x${m[0].length}:</p>${formatMatrixHTML(m)}`;
     }
 
     closeResult.addEventListener('click', () => {
@@ -174,4 +208,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     initCamera();
+    createGrid(matrixA, 3, 3);
 });
