@@ -34,8 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function isTriangular(A) {
         let n = A.length;
-        let isUpper = true;
-        let isLower = true;
+        let isUpper = true, isLower = true;
         for (let i = 0; i < n; i++) {
             for (let j = 0; j < n; j++) {
                 if (i > j && Math.abs(A[i][j]) > 1e-10) isUpper = false;
@@ -45,95 +44,121 @@ document.addEventListener('DOMContentLoaded', () => {
         return isUpper || isLower;
     }
 
-    function formatMatrixHTML(matrix, notes = []) {
+    // Format Augmented [A | B]
+    function formatMatrixHTML(matrix, notes = [], augmented = false) {
+        let rows = matrix.length;
+        let cols = matrix[0].length;
         let html = `<div style="width:100%; overflow-x:auto; margin:10px 0; padding-bottom:10px;">`;
-        html += `<div style="display:inline-flex; align-items:center; min-width:100%; justify-content:center; gap:15px; padding:0 20px;">`;
-        html += `<div style="border-left:2px solid #fff; border-right:2px solid #fff; padding:0 10px; display:inline-block;">`;
+        html += `<div style="display:inline-flex; align-items:center; min-width:100%; justify-content:center; gap:10px; padding:0 20px;">`;
+        
+        // Matrix Part
+        html += `<div style="border-left:2px solid #fff; border-right:2px solid #fff; padding:0 5px; position:relative;">`;
         matrix.forEach((row, i) => {
-            html += `<div style="display:flex; gap:12px; height:30px; align-items:center;">`;
-            row.forEach((cell, cellIdx) => {
-                let color = (i === cellIdx) ? "#f1c40f" : "#00d4ff"; 
-                html += `<span style="color:${color}; min-width:45px; text-align:center; font-size:0.8rem;">${formatFraction(cell)}</span>`;
+            html += `<div style="display:flex; gap:10px; height:30px; align-items:center;">`;
+            row.forEach((cell, j) => {
+                // Tambahkan Garis Vertikal (Augmented) sebelum kolom terakhir
+                if (augmented && j === cols - 1) {
+                    html += `<div style="width:1px; height:20px; background:rgba(255,255,255,0.4); margin:0 5px;"></div>`;
+                }
+                let color = (i === j) ? "#f1c40f" : "#00d4ff"; 
+                html += `<span style="color:${color}; min-width:40px; text-align:center; font-size:0.75rem;">${formatFraction(cell)}</span>`;
             });
             html += `</div>`;
         });
         html += `</div>`;
-        html += `<div style="display:flex; flex-direction:column; justify-content:center;">`;
+
+        // OBE Notes Part
+        html += `<div style="display:flex; flex-direction:column; justify-content:center; padding-left:10px; border-left:1px dashed #444;">`;
         matrix.forEach((_, i) => {
-            html += `<div style="height:30px; display:flex; align-items:center; color:#ff00c8; font-size:0.75rem; font-weight:700; white-space:nowrap;">${notes[i] || ""}</div>`;
+            html += `<div style="height:30px; display:flex; align-items:center; color:#ff00c8; font-size:0.7rem; font-weight:700; white-space:nowrap;">${notes[i] || ""}</div>`;
         });
         html += `</div></div></div>`;
         return html;
     }
 
-    // --- DETERMINANT ENGINE (SMART TRIANGULAR DETECTION) ---
+    // --- ADVANCED SOLVER ENGINE ---
     function solveMatrixComplex(originalMatrix, op) {
         let A = JSON.parse(JSON.stringify(originalMatrix));
         let r = A.length, c = A[0].length;
         let stepsHTML = `<div style="padding-top:10px; text-align:center;">`;
         let swapCount = 0;
-        
+        let detFactors = [];
+        let isAugmented = (op === 'gauss-jordan');
+
         function logStep(msg, matrix, notes) {
-            stepsHTML += `<div style="border-bottom:1px solid #222; margin-bottom:20px; padding:10px 0;">`;
-            stepsHTML += `<p style="font-size:0.6rem; color:var(--secondary); text-transform:uppercase; font-weight:800;">[ ${msg} ]</p>`;
-            stepsHTML += formatMatrixHTML(matrix, notes);
+            stepsHTML += `<div style="margin-bottom:20px; padding:10px 0; background:rgba(255,255,255,0.02); border-radius:12px;">`;
+            stepsHTML += `<p style="font-size:0.6rem; color:var(--secondary); font-weight:800; text-transform:uppercase;">[ ${msg} ]</p>`;
+            stepsHTML += formatMatrixHTML(matrix, notes, isAugmented);
             stepsHTML += `</div>`;
+            stepsHTML += `<div style="color:var(--text-dim); margin-bottom:10px;">↓</div>`;
         }
 
+        logStep("MATRIKS AWAL", A, []);
+
         if (op === 'determinant') {
-            if (r !== c) throw new Error("Matrix harus persegi.");
-            
-            // CEK DINI: Jika sudah segitiga (Atas atau Bawah)
+            // Logika Segitiga Atas seperti sebelumnya...
             if (isTriangular(A)) {
-                logStep("MATRIKS SDH SEGITIGA (DETEKSI OTOMATIS)", A, []);
+                logStep("MATRIKS SUDAH SEGITIGA", A, []);
             } else {
-                logStep("MATRIKS AWAL (PROSES REDUKSI)", A, []);
                 for (let j = 0; j < c; j++) {
-                    let maxRow = j;
-                    for (let i = j + 1; i < r; i++) {
-                        if (Math.abs(A[i][j]) > Math.abs(A[maxRow][j])) maxRow = i;
+                    let maxR = j;
+                    for(let i=j+1; i<r; i++) if(Math.abs(A[i][j]) > Math.abs(A[maxR][j])) maxR = i;
+                    if(Math.abs(A[maxR][j]) < 1e-10) continue;
+                    if(maxR !== j) { [A[j], A[maxR]] = [A[maxR], A[j]]; swapCount++; logStep("TUKAR BARIS", A, {[j]:`R${j+1} ↔ R${maxR+1}`}); }
+                    let notes = [];
+                    for(let i=j+1; i<r; i++) {
+                        let f = A[i][j] / A[j][j];
+                        if(Math.abs(f) > 1e-10) { A[i] = A[i].map((x,idx) => x - f * A[j][idx]); notes[i] = `R${i+1}-(${formatFraction(f)})R${j+1}`; }
                     }
-                    if (Math.abs(A[maxRow][j]) < 1e-10) continue;
-                    if (maxRow !== j) {
-                        [A[j], A[maxRow]] = [A[maxRow], A[j]];
-                        swapCount++;
-                        logStep("TUKAR BARIS", A, { [j]: `R${j+1} ↔ R${maxRow+1}` });
-                    }
-                    let elimNotes = [];
-                    let changed = false;
-                    for (let i = j + 1; i < r; i++) {
-                        let factor = A[i][j] / A[j][j];
-                        if (Math.abs(factor) > 1e-10) {
-                            A[i] = A[i].map((x, idx) => x - factor * A[j][idx]);
-                            elimNotes[i] = `R${i+1} - (${formatFraction(factor)})R${j+1}`;
-                            changed = true;
-                        }
-                    }
-                    if (changed) logStep("ELIMINASI BAWAH", A, elimNotes);
+                    if(notes.length > 0) logStep("ELIMINASI BAWAH", A, notes);
                 }
             }
-
-            let diagonalArr = [];
-            let totalDet = Math.pow(-1, swapCount);
-            for(let i=0; i<r; i++) {
-                diagonalArr.push(A[i][i]);
-                totalDet *= A[i][i];
+            let diag = []; let det = Math.pow(-1, swapCount);
+            for(let i=0; i<r; i++) { diag.push(A[i][i]); det *= A[i][i]; }
+            stepsHTML += `<div style="border-top:2px solid var(--primary); padding-top:20px;"><h2>Δ = ${formatFraction(det)}</h2></div>`;
+        } else if (op === 'gauss-jordan') {
+            // Logika Gauss-Jordan Lengkap + Augmented
+            let pivot = 0;
+            for(let j=0; j < c-1 && pivot < r; j++) {
+                let maxR = pivot;
+                for(let i=pivot+1; i<r; i++) if(Math.abs(A[i][j]) > Math.abs(A[maxR][j])) maxR = i;
+                if(Math.abs(A[maxR][j]) < 1e-10) continue;
+                if(maxR !== pivot) { [A[pivot], A[maxR]] = [A[maxR], A[pivot]]; logStep("SWAP", A, {[pivot]:`R${pivot+1} ↔ R${maxR+1}`}); }
+                
+                let div = A[pivot][j];
+                if(Math.abs(div-1) > 1e-10) { A[pivot] = A[pivot].map(x => x/div); logStep("NORMALISASI", A, {[pivot]:`R${pivot+1} / ${formatFraction(div)}`}); }
+                
+                let notes = [];
+                for(let i=0; i<r; i++) {
+                    if(i !== pivot) {
+                        let f = A[i][j];
+                        if(Math.abs(f) > 1e-10) { A[i] = A[i].map((x,idx) => x - f * A[pivot][idx]); notes[i] = `R${i+1}-(${formatFraction(f)})R${pivot+1}`; }
+                    }
+                }
+                if(notes.length > 0) logStep("ELIMINASI", A, notes);
+                pivot++;
             }
+            stepsHTML += `<div style="border-top:2px solid var(--primary); padding-top:20px;"><h3>SELESAI (BENTUK ESELON)</h3></div>`;
+        }
 
-            let formulaStr = `(-1)<sup>${swapCount}</sup> × (${diagonalArr.map(d=>formatFraction(d)).join(" × ")})`;
-            let finalRes = `<div style="margin-top:40px; border-top:2px solid var(--primary); padding-top:25px;">`;
-            finalRes += `<h2 style="color:#fff; font-weight:800;">HASIL DETERMINAN</h2>`;
-            finalRes += `<p style="font-size:0.7rem; color:var(--text-dim); margin-bottom:15px;">(Produk Diagonal Utama)</p>`;
-            finalRes += `<div style="font-size:1rem; color:var(--text-dim); margin-bottom:10px;">Δ = ${formulaStr}</div>`;
-            finalRes += `<div style="font-size:2.5rem; font-weight:800; color:var(--secondary);">Δ = ${formatFraction(totalDet)}</div>`;
-            finalRes += `</div>`;
-            return stepsHTML + finalRes;
-        } else {
-            return stepsHTML + `<p>Operasi ini sedang disiapkan.</p>`;
+        return stepsHTML + `</div>`;
+    }
+
+    // --- UI ACTIONS (TABS, GRID, CAPTURE) ---
+    function createGrid(container, r, c) {
+        container.innerHTML = '';
+        container.style.gridTemplateColumns = `repeat(${c}, 50px)`;
+        for(let i=0; i < r*c; i++) {
+            const input = document.createElement('input'); 
+            input.type = 'number'; input.className = 'matrix-cell'; input.value = '0';
+            container.appendChild(input);
         }
     }
 
-    // --- UI ACTIONS ---
+    updateGridBtn.addEventListener('click', () => {
+        createGrid(matrixA, Number(rowsInput.value), Number(colsInput.value));
+    });
+
     captureBtn.addEventListener('click', async () => {
         resultPanel.classList.remove('hidden');
         setTimeout(() => { resultPanel.classList.add('show'); document.querySelector('.panel-content').scrollTop = 0; }, 10);
@@ -144,30 +169,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ctx = canvas.getContext('2d'); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const engine = await Tesseract.recognize(canvas.toDataURL('image/jpeg'), 'eng');
-                m = reconstructMatrix(engine.data.words);
+                const rawM = reconstructMatrix(engine.data.words);
+                m = rawM;
             } else {
-                const ins = matrixA.querySelectorAll('input'); const r = rowsInput.value, c = colsInput.value;
+                const ins = matrixA.querySelectorAll('input'); 
+                const r = Number(rowsInput.value), col = Number(colsInput.value);
                 m = []; for(let i=0; i<r; i++) {
-                    const row = []; for(let j=0; j<c; j++) row.push(Number(ins[i*c + j].value));
+                    const row = []; for(let j=0; j<col; j++) row.push(Number(ins[i*col + j].value));
                     m.push(row);
                 }
             }
             patternReasoning.innerHTML = solveMatrixComplex(m, operationSelect.value);
-            recommendedAnswer.innerHTML = "SELESAI";
+            recommendedAnswer.innerHTML = "DONE";
             loadingState.classList.add('hidden'); dataState.classList.remove('hidden');
         } catch (e) {
-            recommendedAnswer.textContent = "Error"; patternReasoning.textContent = e.message;
+            patternReasoning.textContent = e.message;
             loadingState.classList.add('hidden'); dataState.classList.remove('hidden');
         }
     });
-
-    function createGrid(container, r, c) {
-        container.innerHTML = ''; container.style.gridTemplateColumns = `repeat(${c}, 50px)`;
-        for(let i=0; i < r*c; i++) {
-            const input = document.createElement('input'); input.type = 'number';
-            input.className = 'matrix-cell'; input.value = '0'; container.appendChild(input);
-        }
-    }
 
     function reconstructMatrix(words) {
         const numbers = words.filter(w => /^-?\d+([.,]\d+)?$/.test(w.text));
@@ -187,9 +206,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return rows.map(r => { r.sort((a,b)=>a.bbox.x0 - b.bbox.x0); return r.map(n=>Number(n.text.replace(',','.'))); });
     }
 
-    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(s=>{video.srcObject=s; stream=s;});
+    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(s=>{stream=s; video.srcObject=s;});
     closeResult.addEventListener('click', ()=>{resultPanel.classList.remove('show'); setTimeout(()=>resultPanel.classList.add('hidden'), 500);});
     btnScanTab.addEventListener('click', ()=>{currentMode='scan'; btnScanTab.classList.add('active'); btnManualTab.classList.remove('active'); document.getElementById('scan-view').classList.remove('hidden'); document.getElementById('manual-view').classList.add('hidden');});
     btnManualTab.addEventListener('click', ()=>{currentMode='manual'; btnScanTab.classList.remove('active'); btnManualTab.classList.add('active'); document.getElementById('scan-view').classList.add('hidden'); document.getElementById('manual-view').classList.remove('hidden'); createGrid(matrixA, rowsInput.value, colsInput.value);});
+
     createGrid(matrixA, 3, 3);
 });
