@@ -100,11 +100,47 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (isInv || isGJ) {
             let p = 0;
             for (let j = 0; j < augIdx && p < r; j++) {
-                let mx = p; for (let i = p + 1; i < r; i++) if (Math.abs(A[i][j]) > Math.abs(A[mx][j])) mx = i;
-                if (Math.abs(A[mx][j]) < 1e-10) continue;
-                if (mx !== p) { [A[p], A[mx]] = [A[mx], A[p]]; log("TUKAR BARIS", A, {[p]:`R${p+1}↔R${mx+1}`}); }
+                // Cek apakah pivot saat ini sudah = 1
+                let pivotVal = A[p][j];
+                
+                if (Math.abs(pivotVal - 1) < 1e-10) {
+                    // Pivot sudah 1 → langsung eliminasi, TANPA tukar baris
+                    let ns = [];
+                    for (let i = 0; i < r; i++) {
+                        if (i !== p) {
+                            let f = A[i][j];
+                            if (Math.abs(f) > 1e-10) { A[i] = A[i].map((x, idx) => x - f * A[p][idx]); ns[i] = `R${i+1}-(${formatFraction(f)})R${p+1}`; }
+                        }
+                    }
+                    if (ns.length > 0) log("ELIMINASI KOLOM", A, ns);
+                    p++;
+                    continue;
+                }
+                
+                // Pivot bukan 1 → cek apakah pivot = 0, jika ya, tukar baris
+                if (Math.abs(pivotVal) < 1e-10) {
+                    // Cari baris di bawah yang punya elemen non-zero di kolom j
+                    let swapRow = -1;
+                    // Prioritaskan baris yang sudah punya 1 di kolom j
+                    for (let i = p + 1; i < r; i++) {
+                        if (Math.abs(A[i][j] - 1) < 1e-10) { swapRow = i; break; }
+                    }
+                    // Jika tidak ada yg 1, cari yang terbesar
+                    if (swapRow === -1) {
+                        for (let i = p + 1; i < r; i++) {
+                            if (Math.abs(A[i][j]) > 1e-10) { swapRow = (swapRow === -1 || Math.abs(A[i][j]) > Math.abs(A[swapRow][j])) ? i : swapRow; }
+                        }
+                    }
+                    if (swapRow === -1) continue; // Semua 0, skip kolom ini
+                    [A[p], A[swapRow]] = [A[swapRow], A[p]];
+                    log("TUKAR BARIS", A, {[p]:`R${p+1}↔R${swapRow+1}`});
+                }
+                
+                // Normalisasi pivot jadi 1 (jika belum 1)
                 let div = A[p][j];
                 if (Math.abs(div - 1) > 1e-10) { A[p] = A[p].map(x => x / div); log("NORMALISASI", A, {[p]:`R${p+1} ÷ (${formatFraction(div)})`}); }
+                
+                // Eliminasi kolom
                 let ns = [];
                 for (let i = 0; i < r; i++) {
                     if (i !== p) {
