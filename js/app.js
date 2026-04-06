@@ -84,15 +84,43 @@ document.addEventListener('DOMContentLoaded', () => {
             log("AWAL", A);
             if (!isTriangular(A)) {
                 for (let j = 0; j < c; j++) {
-                    let mx = j; for (let i = j + 1; i < r; i++) if (Math.abs(A[i][j]) > Math.abs(A[mx][j])) mx = i;
-                    if (Math.abs(A[mx][j]) < 1e-10) continue;
-                    if (mx !== j) { [A[j], A[mx]] = [A[mx], A[j]]; swapCount++; log("TUKAR BARIS", A, {[j]:`R${j+1}↔R${mx+1}`}); }
+                    let bestPivot = -1;
+                    // 1. Prioritaskan baris yang mengandung 1 Utama atau -1
+                    for (let i = j; i < r; i++) {
+                        if (Math.abs(A[i][j] - 1) < 1e-10 || Math.abs(A[i][j] + 1) < 1e-10) {
+                            bestPivot = i;
+                            break;
+                        }
+                    }
+
+                    if (bestPivot !== -1) {
+                        if (bestPivot !== j) {
+                            [A[j], A[bestPivot]] = [A[bestPivot], A[j]];
+                            swapCount++;
+                            log("TUKAR BARIS", A, {[j]: `R${j+1}↔R${bestPivot+1} (Dapatkan 1 Utama)`});
+                        }
+                    } else {
+                        // 2. Jika tidak ada 1/-1, cari yang nilai absolutnya paling besar
+                        let mx = j;
+                        for (let i = j + 1; i < r; i++) if (Math.abs(A[i][j]) > Math.abs(A[mx][j])) mx = i;
+                        if (Math.abs(A[mx][j]) < 1e-10) continue;
+                        if (mx !== j) { 
+                            [A[j], A[mx]] = [A[mx], A[j]]; 
+                            swapCount++; 
+                            log("TUKAR BARIS", A, {[j]:`R${j+1}↔R${mx+1}`}); 
+                        }
+                    }
+
+                    // 3. Proses Eliminasi untuk membentuk Matriks Segitiga
                     let ns = [];
                     for (let i = j + 1; i < r; i++) {
                         let f = A[i][j] / A[j][j];
-                        if (Math.abs(f) > 1e-10) { A[i] = A[i].map((x, ix) => x - f * A[j][ix]); ns[i] = `R${i+1}-(${formatFraction(f)})R${j+1}`; }
+                        if (Math.abs(f) > 1e-10) { 
+                            A[i] = A[i].map((x, ix) => x - f * A[j][ix]); 
+                            ns[i] = `R${i+1}-(${formatFraction(f)})R${j+1}`; 
+                        }
                     }
-                    if (ns.length > 0) log("ELIMINASI BAWAH", A, ns);
+                    if (ns.length > 0) log("ELIMINASI BAWAH (Bentuk Segitiga)", A, ns);
                 }
             }
             let dArr=[]; let dVal=Math.pow(-1, swapCount); for(let i=0; i<r; i++) { dArr.push(A[i][i]); dVal*=A[i][i]; }
